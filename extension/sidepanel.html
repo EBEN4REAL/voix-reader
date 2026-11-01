@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Kokoro Reader</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header>
+    <h1>Kokoro Reader</h1>
+    <span id="server-status" class="dot" title="Checking server..."></span>
+  </header>
+
+  <section class="controls">
+    <button id="prev" title="Previous sentence" disabled>⏮</button>
+    <button id="play" class="primary" title="Read page or selection">▶ Read</button>
+    <button id="stop" title="Stop" disabled>⏹</button>
+    <button id="next" title="Next sentence" disabled>⏭</button>
+  </section>
+
+  <section class="options">
+    <label>Voice
+      <select id="voice"></select>
+    </label>
+    <label>Speed <span id="speed-value">1.0×</span>
+      <input id="speed" type="range" min="0.5" max="2" step="0.1" value="1">
+    </label>
+  </section>
+
+  <p id="status" class="status">Select text on a page, or just press Read for the whole page.</p>
+  <ol id="chunks"></ol>
+
+  <details class="settings">
+    <summary>Settings</summary>
+    <label>Server URL
+      <input id="server" type="url" placeholder="http://127.0.0.1:8880">
+    </label>
+    <label>API key (only if the server sets API_KEY)
+      <input id="api-key" type="password" autocomplete="off">
+    </label>
+    <button id="save-server">Save</button>
+  </details>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
