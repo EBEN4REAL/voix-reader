@@ -1,0 +1,82 @@
+{
+  "info": {
+    "name": "Kokoro Local TTS",
+    "description": "Local Kokoro 82M server mirroring DeepInfra's APIs. Switch baseUrl to https://api.deepinfra.com and set apiKey to hit DeepInfra instead.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{apiKey}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8880" },
+    { "key": "apiKey", "value": "local" }
+  ],
+  "item": [
+    {
+      "name": "1. Health",
+      "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+    },
+    {
+      "name": "2. List voices",
+      "request": { "method": "GET", "url": "{{baseUrl}}/voices" }
+    },
+    {
+      "name": "3. OpenAI speech - mp3 (af_bella)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/v1/openai/audio/speech",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"hexgrad/Kokoro-82M\",\n  \"input\": \"The quick brown fox jumped over the lazy dog.\",\n  \"voice\": \"af_bella\",\n  \"response_format\": \"mp3\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. OpenAI speech - wav (am_michael)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/v1/openai/audio/speech",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"hexgrad/Kokoro-82M\",\n  \"input\": \"Hello, this is a local test.\",\n  \"voice\": \"am_michael\",\n  \"response_format\": \"wav\"\n}"
+        }
+      }
+    },
+    {
+      "name": "5. OpenAI speech - British (bm_george)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/v1/openai/audio/speech",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"hexgrad/Kokoro-82M\",\n  \"input\": \"Good afternoon. Shall we have a cup of tea?\",\n  \"voice\": \"bm_george\",\n  \"response_format\": \"mp3\"\n}"
+        }
+      }
+    },
+    {
+      "name": "6. DeepInfra native inference (JSON + base64)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/v1/inference/hexgrad/Kokoro-82M",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"The quick brown fox jumps over the lazy dog\",\n  \"preset_voice\": [\"af_bella\"],\n  \"output_format\": \"mp3\"\n}"
+        }
+      }
+    },
+    {
+      "name": "7. Error - unknown voice (expect 400)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/v1/openai/audio/speech",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"input\": \"hi\",\n  \"voice\": \"nope\"\n}" }
+      }
+    }
+  ]
+}
