@@ -1,0 +1,6 @@
+Meeting notes for the reading project
+
+The team agreed that plain text files should be read as well. Lines in a text file are often wrapped by hand at about
+seventy characters, and the reader should join them back into sentences.
+
+Next steps: test with longer files, and check that numbered lists read naturally.
