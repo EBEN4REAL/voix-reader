@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>Canvas document</title></head><body style="margin:0">
+<div style="font:12px sans-serif;padding:6px">File Edit View</div>
+<canvas id="c" width="1200" height="700" style="width:1200px;height:700px"></canvas>
+<script>
+const ctx = document.getElementById('c').getContext('2d');
+ctx.fillStyle = '#fff'; ctx.fillRect(0,0,1200,700); ctx.fillStyle = '#111'; ctx.font = '28px Georgia';
+['This document is drawn on a canvas, like an online editor.', 'There is no text in the page for an extension to read.', 'Voix recognises the words on screen instead.'].forEach((t,i)=>ctx.fillText(t, 60, 120 + i*60));
+</script></body></html>
