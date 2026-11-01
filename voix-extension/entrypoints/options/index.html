@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Voix settings</title>
+    <meta name="manifest.open_in_tab" content="true" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header><img src="/icon/48.png" alt="" width="40" height="40" /><h1>Voix settings</h1></header>
+
+      <section>
+        <h2>Voice service</h2>
+        <label>Server URL <input id="server" type="url" placeholder="http://127.0.0.1:8880" /></label>
+        <label>API key <span class="hint">(only if the server sets API_KEY)</span>
+          <input id="api-key" type="password" autocomplete="off" />
+        </label>
+        <div class="row"><button id="save">Save</button><button id="test" class="secondary">Test connection</button></div>
+        <p id="status" role="status"></p>
+      </section>
+
+      <section>
+        <h2>Sites where Voix never offers to read</h2>
+        <ul id="never"></ul>
+        <p id="never-empty" class="hint">None yet. Use "Never on this site" on the Listen prompt to add one.</p>
+      </section>
+
+      <section id="file-access">
+        <h2>PDFs and files on your computer</h2>
+        <p>To read PDFs and text files opened from your computer (addresses starting with <code>file://</code>),
+          Chrome needs your permission:</p>
+        <ol>
+          <li>Open <code>chrome://extensions</code> (paste it into the address bar).</li>
+          <li>Find <strong>Voix</strong> and click <strong>Details</strong>.</li>
+          <li>Turn on <strong>Allow access to file URLs</strong>, then reload the file's tab.</li>
+        </ol>
+        <p id="file-access-status" class="hint"></p>
+      </section>
+
+      <section>
+        <h2>What Voix can read</h2>
+        <p>Articles and web pages (including pages built with web components and documents inside frames),
+          PDFs (opened in Chrome, embedded in pages, or saved on your computer; scanned pages are read with
+          text recognition), Google Docs, Slides and Sheets, and plain-text files. For anything drawn as an
+          image or canvas, "Read the whole page" recognises the text that is on screen.</p>
+      </section>
+
+      <section id="privacy">
+        <h2>Privacy</h2>
+        <p>To turn articles into natural speech, Voix sends the article text (only the sentences being read) to the
+          voice service configured above. The text is used to generate audio and is not stored by the Voix server.</p>
+        <p>Voix never sends text from email and banking sites, and it only reads a page when you press Listen,
+          Play, the toolbar icon or the keyboard shortcut (Alt+Shift+V by default; change it at
+          chrome://extensions/shortcuts).</p>
+        <p>Your settings (voice, speed, toggles, widget position) are stored in this browser only.</p>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
