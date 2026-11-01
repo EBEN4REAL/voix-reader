@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voix widget: dev states</title>
+    <style>
+      body { margin: 0; font: 16px/1.7 Georgia, serif; color: #062A3D; background: #F3F8FB; }
+      .bar { display: flex; align-items: center; gap: 12px; padding: 10px 24px; background: #fff; border-bottom: 1px solid #E3EEF4; font: 14px system-ui, sans-serif; color: #4A6578; }
+      .bar .url { flex: 1; background: #EEF4F8; border-radius: 999px; padding: 8px 16px; }
+      article { max-width: 720px; margin: 0 0 0 100px; padding: 24px 0 200px; }
+      nav { font: 600 15px system-ui, sans-serif; display: flex; gap: 28px; margin-bottom: 40px; color: #4A6578; }
+      nav b { color: #062A3D; }
+      .kicker { font: 700 12px system-ui, sans-serif; letter-spacing: .08em; color: #0A5F8E; }
+      h1 { font-size: 46px; line-height: 1.1; margin: 8px 0 12px; }
+      .by { font: 14px system-ui, sans-serif; color: #4A6578; margin-bottom: 24px; }
+      .ad { border: 1px dashed #B7CBD6; border-radius: 12px; padding: 36px 24px; font: 700 12px system-ui, sans-serif; letter-spacing: .1em; color: #4A6578; background: #EAF1F5; }
+      #dev { position: fixed; left: 16px; bottom: 16px; z-index: 10; width: 230px; padding: 12px; background: #062A3D; color: #fff; border-radius: 14px; font: 13px system-ui, sans-serif; }
+      #dev h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; color: #CDEFFF; }
+      #dev button { display: block; width: 100%; margin: 4px 0; min-height: 32px; border-radius: 8px; border: 0; background: #0A5F8E; color: #fff; font: 600 13px system-ui, sans-serif; cursor: pointer; text-align: left; padding: 0 10px; }
+      #dev button:hover { background: #0B6FA6; }
+    </style>
+  </head>
+  <body>
+    <div class="bar"><span>‹ › ↻</span><span class="url">newsroom.example/essays/the-long-read</span></div>
+    <article>
+      <nav><b>Newsroom</b><span>Essays</span><span>Reviews</span><span>Opinion</span></nav>
+      <div class="kicker">ESSAY</div>
+      <h1>The Quiet Return of the Long Read</h1>
+      <div class="by">By Newsroom Staff</div>
+      <p>For years, the long article looked like a casualty of the scrolling age. Readers skimmed headlines, saved links for later, and rarely came back to them. Something has shifted, though, and it has less to do with attention than with where reading happens.</p>
+      <p>People now read while walking, cooking, and sitting in traffic, and their eyes are often busy elsewhere. Listening fills that gap without asking anyone to stop what they are doing. A good narrator turns a saved article into company for a commute.</p>
+      <div class="ad">ADVERTISEMENT</div>
+      <p>The challenge is that web pages are messy. Menus, banners, and adverts surround the text, and a reader that cannot tell the difference will read all of it aloud. The best tools find the article itself and read only that.</p>
+    </article>
+    <div id="dev" aria-label="Dev states"></div>
+    <div id="widget-host"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
