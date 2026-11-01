@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Voix",
+  "version": "0.1.0",
+  "description": "Read the current page aloud using a local Voix TTS server.",
+  "permissions": ["sidePanel", "scripting", "storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Open Voix Reader" }
+}
