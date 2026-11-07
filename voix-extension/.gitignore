@@ -3,3 +3,5 @@ node_modules
 .wxt
 e2e/screenshots
 public/vendor
+.output-store
+store/.tmp
