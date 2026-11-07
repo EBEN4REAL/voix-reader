@@ -12,6 +12,7 @@ Run:  venv/bin/python -m uvicorn server:app --host 127.0.0.1 --port 8880
 
 Env: API_KEY    require "Authorization: Bearer <key>" (or ?api_key= on GET) when set
      MAX_CHARS  input limit per request (default 10000)
+     VOIX_PRODUCTION=1  public deployment: no /docs, no GET speech endpoint (text in URLs gets logged)
      ONNX_PROVIDER  force a provider, e.g. CUDAExecutionProvider
 """
 import base64
@@ -35,6 +36,7 @@ from pydantic import BaseModel
 MODELS_DIR = Path(__file__).parent / "models"
 MODEL_ID = "hexgrad/Kokoro-82M"
 API_KEY = os.environ.get("API_KEY")
+PRODUCTION = os.environ.get("VOIX_PRODUCTION") == "1"
 MAX_CHARS = int(os.environ.get("MAX_CHARS", "10000"))  # kokoro-onnx chunks long text internally
 LANGS = {"en-us", "en-gb", "es", "fr-fr", "hi", "it", "pt-br", "ja", "cmn"}
 # Kokoro voice prefix letter -> espeak language, so callers rarely need to pass lang.
@@ -68,7 +70,8 @@ def require_key(request: Request, creds: HTTPAuthorizationCredentials | None = D
         raise HTTPException(401, "invalid or missing API key")
 
 
-app = FastAPI(title="Kokoro TTS", dependencies=[Depends(require_key)])
+docs = {"docs_url": None, "redoc_url": None, "openapi_url": None} if PRODUCTION else {}
+app = FastAPI(title="Kokoro TTS", dependencies=[Depends(require_key)], **docs)
 
 
 class SpeechRequest(BaseModel):
@@ -138,7 +141,6 @@ def speech(req: SpeechRequest):
     )
 
 
-@app.get("/v1/audio/speech")
 def speech_get(
     input: str,
     voice: str = "af_heart",
@@ -150,6 +152,10 @@ def speech_get(
     re-fetch the URL with GET, so POST-only endpoints can't play there."""
     return speech(SpeechRequest(input=input, voice=voice, response_format=response_format,
                                 speed=speed, lang=lang))
+
+
+if not PRODUCTION:
+    app.get("/v1/audio/speech")(speech_get)
 
 
 @app.post(f"/v1/inference/{MODEL_ID}")
