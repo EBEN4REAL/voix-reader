@@ -1,7 +1,10 @@
-venv/
-models/
-extension/
-__pycache__/
-*.wav
-*.mp3
+*.env
 *.log
+*.mp3
+*.wav
+.env
+__pycache__/
+deploy/
+extension/
+models/
+venv/
