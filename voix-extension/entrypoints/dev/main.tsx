@@ -5,6 +5,7 @@ import { MockReaderController } from "../../src/controller/mock";
 import { loadVoixFont } from "../../src/ui/font";
 import { UiStore, type WidgetActions } from "../../src/ui/uiStore";
 import { Widget } from "../../src/ui/Widget";
+import { clearHighlight, highlightRange } from "../../src/page/highlight";
 import css from "../../src/ui/widget.css?inline";
 
 const controller = new MockReaderController();
@@ -30,6 +31,23 @@ shadow.append(style, container);
 ReactDOM.createRoot(container).render(<Widget controller={controller} ui={ui} actions={actions} />);
 void loadVoixFont("/fonts/PlusJakartaSans-Variable.woff2");
 
+// Highlight the current sentence in the sample article, like the real extension does.
+controller.subscribe((s) => {
+  const text = s.sentences[s.currentIndex]?.text;
+  if (!text || s.status === "idle" || !s.settings.highlightOnPage) return clearHighlight();
+  for (const el of document.querySelectorAll("article h1, article p")) {
+    const node = el.firstChild;
+    const at = node?.nodeType === Node.TEXT_NODE ? (node as Text).data.indexOf(text) : -1;
+    if (node && at >= 0) {
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + text.length);
+      return highlightRange(range);
+    }
+  }
+  clearHighlight();
+});
+
 const STATES: [string, () => void][] = [
   ["Expanded · playing", () => { ui.set({ card: null, mode: "expanded" }); controller.restart(); }],
   ["Expanded · paused at 5/12", () => { ui.set({ card: null, mode: "expanded" }); controller.jumpTo(4); controller.pause(); }],
@@ -43,6 +61,7 @@ const STATES: [string, () => void][] = [
   ["Blocked site (banking/email)", () => ui.set({ card: { kind: "blocked" } })],
   ["Error", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateError(); }],
   ["Close", () => actions.onClose()],
+  ["Reading sentence 5/12", () => { ui.set({ card: null, mode: "expanded" }); controller.jumpTo(4); }],
 ];
 
 const dev = document.getElementById("dev")!;
@@ -55,6 +74,7 @@ dev.append(title, ...STATES.map(([label, fn]) => {
   return b;
 }));
 
-// Deep link for screenshots: dev.html#state=3
+// Deep link for screenshots: dev.html#state=3 (add "&clean" to hide this panel)
+if (location.hash.includes("clean")) dev.hidden = true;
 const m = location.hash.match(/state=(\d+)/);
 STATES[m ? Number(m[1]) : 0]?.[1]();
