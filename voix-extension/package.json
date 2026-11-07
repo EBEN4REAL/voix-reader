@@ -2,7 +2,7 @@
   "name": "voix-extension",
   "description": "Voix: listen to any article, in a natural voice.",
   "private": true,
-  "version": "0.2.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -15,7 +15,10 @@
     "e2e": "node e2e/run.mjs",
     "predev": "node scripts/copy-vendor.mjs",
     "prebuild": "node scripts/copy-vendor.mjs",
-    "e2e:docs": "node e2e/documents.mjs"
+    "e2e:docs": "node e2e/documents.mjs",
+    "prezip:store": "node scripts/copy-vendor.mjs",
+    "zip:store": "VOIX_STORE=1 wxt zip",
+    "store:assets": "node scripts/store-assets.mjs"
   },
   "dependencies": {
     "@tesseract.js-data/eng": "^1.0.0",
@@ -31,6 +34,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^26.6.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@wxt-dev/module-react": "^1.2.2",
