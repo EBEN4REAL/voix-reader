@@ -1,0 +1,24 @@
+Voix reads the web to you in a natural, human-sounding voice. Open an article, press Listen, and keep doing what you were doing: walking, cooking, commuting or resting your eyes.
+
+WHAT VOIX CAN READ
+• Articles and web pages: Voix finds the article itself and skips menus, banners and adverts.
+• PDFs: opened in Chrome, embedded in a page, or saved on your computer. Scanned PDFs are read too, using text recognition.
+• Google Docs, Slides and Sheets.
+• Plain-text files, and documents shown inside online viewers.
+• Anything else on screen: "Read the whole page" recognises text that is drawn as an image.
+
+FOLLOW ALONG
+• The sentence being read is highlighted on the page and in Voix's own list, and the page scrolls with it.
+• Click any sentence to jump straight to it.
+
+MADE FOR LISTENING
+• 23 natural voices with US and UK accents.
+• Speed from 0.5× to 3×, without changing the pitch.
+• Skip back or forward a sentence, pause and resume, or minimise Voix to a small bar while it keeps reading.
+• Keyboard shortcut: Alt+Shift+V opens or closes Voix (change it at chrome://extensions/shortcuts).
+• If natural voices are unavailable, Voix switches to your device's voice so reading never stops.
+
+PRIVACY
+• Voix only sends text when you ask it to read: the sentences being read go to the Voix voice service to be turned into speech, and are not stored.
+• Pages such as email and online banking are never sent.
+• PDF reading and text recognition happen on your computer. Your settings stay in your browser.
