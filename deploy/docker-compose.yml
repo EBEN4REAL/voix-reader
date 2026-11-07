@@ -1,0 +1,35 @@
+# Voix voice server for a public VPS: the Kokoro API behind Caddy, which
+# gets and renews the HTTPS certificate for VOIX_DOMAIN automatically.
+#   cp .env.example .env   (fill it in)   then:   docker compose up -d --build
+services:
+  voix:
+    build:
+      context: ..
+      args:
+        BASE: ubuntu:24.04   # CPU server; the Dockerfile's default is the CUDA/GPU base
+        ORT: onnxruntime
+    image: voix-tts:cpu
+    restart: unless-stopped
+    environment:
+      API_KEY: ${API_KEY:?set API_KEY in deploy/.env}
+      VOIX_PRODUCTION: "1"
+    expose:
+      - "8880"   # reachable only through Caddy, never directly from the internet
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [voix]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      VOIX_DOMAIN: ${VOIX_DOMAIN:?set VOIX_DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
