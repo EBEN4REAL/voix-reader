@@ -110,3 +110,30 @@ API key `<your key>` → **Save**. The dot turns green when connected.
 - Narrow `host_permissions` in `manifest.json` from `<all_urls>` to what you need.
 - Kokoro 82M is small: one GPU serves many concurrent readers. A CPU server
   also works (about 7x real-time on an M-series Mac) if traffic is low.
+
+## Hostinger VPS (CPU, Ubuntu) with Docker Compose and automatic HTTPS
+
+`deploy/` runs Voix behind [Caddy](https://caddyserver.com), which gets and renews the HTTPS
+certificate. Voix's port is never exposed; `VOIX_PRODUCTION=1` turns off `/docs` and the GET
+speech endpoint (text in URLs ends up in logs).
+
+1. **DNS:** in your domain's DNS settings add an **A record**: name `tts` (or `@` for the bare
+   domain) pointing to the VPS IP. Wait until `ping tts.yourdomain.com` shows that IP.
+2. **Firewall:** allow ports 22 (SSH), 80 and 443 (hPanel → VPS → Firewall, or `ufw`).
+3. **Copy the server files** from your Mac:
+   ```bash
+   cd ~/Documents/projects/kokoro-local
+   ssh root@<VPS_IP> "mkdir -p /opt/voix"
+   scp -r Dockerfile .dockerignore server.py deploy root@<VPS_IP>:/opt/voix/
+   ```
+4. **Configure and start** on the VPS:
+   ```bash
+   ssh root@<VPS_IP>
+   cd /opt/voix/deploy
+   cp .env.example .env && chmod 600 .env
+   nano .env        # VOIX_DOMAIN=tts.yourdomain.com, API_KEY=$(openssl rand -hex 24)
+   docker compose up -d --build
+   ```
+5. **Check:** `curl https://tts.yourdomain.com/health` → `{"status":"ok",...}`.
+
+Updating the server later: copy the changed files again, then `docker compose up -d --build`.
