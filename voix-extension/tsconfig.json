@@ -4,6 +4,6 @@
     "strict": true,
     "jsx": "react-jsx",
     "resolveJsonModule": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   }
 }
