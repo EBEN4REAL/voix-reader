@@ -108,3 +108,21 @@ Screenshots land in `e2e/screenshots/`.
 - OCR is English only (`@tesseract.js-data/eng`) and adds ~7 MB; PDF.js adds ~6 MB.
 - Not supported: password-protected PDFs (a clear message is shown), closed Shadow DOM, and text selected
   inside PDFs, Google Docs or iframes (the whole document is read; click a sentence to jump).
+
+## Publishing to the Chrome Web Store
+
+Store material lives in `store/`: listing text and Privacy-tab answers (`LISTING.md`), the privacy
+policy to publish (`privacy-policy.html`, replace `CONTACT_EMAIL`), screenshots and the promo tile
+(`npm run store:assets` regenerates them).
+
+Build the upload zip once the voice server is live over HTTPS:
+
+```bash
+WXT_VOIX_SERVER_URL=https://<your voice server> WXT_VOIX_API_KEY=<key, if the server sets one> npm run zip:store
+# -> .output-store/voix-extension-<version>-chrome.zip  (no dev page; never touches .output/)
+```
+
+The build refuses to run without an `https://` server URL, except the local server for a test
+release: `WXT_VOIX_SERVER_URL=http://127.0.0.1:8880 npm run zip:store` (natural voice only on a
+machine running `./start.sh`; everyone else gets the device-voice fallback). Bump `version` in
+`package.json` for every update you upload.
