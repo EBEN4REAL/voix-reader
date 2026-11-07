@@ -1,0 +1,6 @@
+# HTTPS for the Voix API. No access log: request details (and client
+# addresses) aren't written to disk.
+{$VOIX_DOMAIN} {
+	encode gzip
+	reverse_proxy voix:8880
+}
