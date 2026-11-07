@@ -22,8 +22,9 @@ export const DEFAULT_PREFS: Prefs = {
   position: null,
   privacyAccepted: false,
   neverSites: [],
-  serverUrl: "http://127.0.0.1:8880",
-  apiKey: "",
+  // Set at build time for store releases (WXT_VOIX_SERVER_URL / WXT_VOIX_API_KEY); local server otherwise.
+  serverUrl: import.meta.env.WXT_VOIX_SERVER_URL || "http://127.0.0.1:8880",
+  apiKey: import.meta.env.WXT_VOIX_API_KEY || "",
 };
 
 const PREFIX = "voix:";
