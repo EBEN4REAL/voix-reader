@@ -52,11 +52,13 @@ RUN if [ "$CJK" = "1" ]; then \
 WORKDIR /app
 ADD https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx models/
 ADD https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin models/
-COPY server.py voices.json ./
+COPY voices.json ./
 COPY scripts/download_piper_voices.py scripts/
 # Checked against Piper's published checksums; each voice's MODEL_CARD (licence) is kept with it.
 RUN if [ "$PIPER_LANGS" = "all" ]; then python scripts/download_piper_voices.py; \
     elif [ "$PIPER_LANGS" != "none" ]; then python scripts/download_piper_voices.py --lang $PIPER_LANGS; fi
+# Last, so a code change doesn't download the voices again.
+COPY server.py ./
 
 RUN chmod -R a+r /app
 USER 1000
