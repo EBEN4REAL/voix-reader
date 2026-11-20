@@ -2,6 +2,7 @@ import type {
   EngineCommand, EngineEventMessage, FrameExtract, FrameRequest, ToBackground, ToOffscreen,
 } from "../src/controller/engine";
 import type { DocJob, DocRequest } from "../src/docs/protocol";
+import { fetchRegistry, storedRegistry } from "../src/lang/remote";
 import { loadPrefs } from "../src/storage";
 
 // Routes messages between the page widgets (content scripts), the single
@@ -36,6 +37,8 @@ export default defineBackground(() => {
     if (msg.doc && tab?.id != null) return reply(handleDoc(tab.id, tab.windowId, msg.doc));
     if (msg.frames && tab?.id != null) return reply(handleFrames(tab.id, msg.frames));
     if (msg.fetchText) return reply(fetchText(msg.fetchText));
+    if (msg.detectLanguage) return reply(browser.i18n.detectLanguage(msg.detectLanguage));
+    if (msg.registry) return reply(getRegistry(msg.registry.force));
   });
 
   // Don't keep reading for a tab that is gone.
@@ -75,6 +78,9 @@ function openOptions(hash?: string) {
 let creating: Promise<void> | null = null;
 
 async function ensureOffscreen() {
+  // While the document is being created, hasDocument() is already true but its script isn't
+  // listening yet: a command sent then is lost. Everyone waits for creation to finish.
+  if (creating) return creating;
   if (await browser.offscreen.hasDocument()) return;
   creating ??= browser.offscreen
     .createDocument({
@@ -157,4 +163,19 @@ async function fetchText(url: string) {
   const res = await fetch(url, { credentials: "include" });
   const type = res.headers.get("content-type") ?? "";
   return { ok: res.ok && !type.includes("text/html"), status: res.status, text: res.ok ? await res.text() : "" };
+}
+
+// ---------- voice registry ----------
+
+const RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+let lastFailure = 0;
+
+/** The stored registry, fetched again from the server when a day old (or forced, after a refusal). */
+async function getRegistry(force: boolean) {
+  const stored = await storedRegistry();
+  if (!force && (!stored.stale || Date.now() - lastFailure < RETRY_AFTER_FAILURE_MS)) return stored.registry;
+  const { serverUrl, apiKey } = await loadPrefs(["serverUrl", "apiKey"]);
+  const fresh = await fetchRegistry({ url: serverUrl, apiKey });
+  if (!fresh) lastFailure = Date.now();
+  return fresh ?? stored.registry;
 }
