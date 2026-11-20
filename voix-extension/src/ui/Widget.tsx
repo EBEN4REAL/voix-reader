@@ -25,13 +25,24 @@ export function Widget({ controller, ui, actions }: Props) {
     if (!state.usingFallbackVoice) setFallbackDismissed(false);
   }, [state.usingFallbackVoice]);
 
+  // The language list lives in the expanded panel: Play in the pill can open it.
+  useEffect(() => {
+    if (state.languagePickerOpen && view.mode === "pill") ui.set({ mode: "expanded" });
+  }, [state.languagePickerOpen, view.mode, ui]);
+
+  const { language } = state;
   const announcement =
     state.status === "preparing" ? state.loadingMessage ?? "Preparing voice"
     : state.status === "error" ? `Voix stopped. ${state.error ?? ""}`
-    : state.usingFallbackVoice ? "Using your device's basic voice. Natural voices are unavailable right now."
-    : "";
+    : language && !language.supported && !state.usingFallbackVoice ? `Voix cannot read ${language.name} yet.`
+    : state.languagePickerOpen && language?.needsConfirm ? "Choose the language to read in."
+    : state.usingFallbackVoice && language?.supported ? "Using your device's basic voice. Natural voices are unavailable right now."
+    : state.voiceNotice ?? "";
 
-  const minimise = () => ui.set({ mode: "pill" });
+  const minimise = () => {
+    if (state.languagePickerOpen) controller.closeLanguagePicker(); // the list lives in the expanded panel
+    ui.set({ mode: "pill" });
+  };
   const expand = () => ui.set({ mode: "expanded" });
 
   // Keyboard shortcuts only apply while focus is inside the widget.
@@ -62,7 +73,8 @@ export function Widget({ controller, ui, actions }: Props) {
         controller.setSpeed(state.speed - 0.1);
         break;
       case "Escape":
-        if (view.mode === "expanded") minimise();
+        if (state.languagePickerOpen) controller.closeLanguagePicker();
+        else if (view.mode === "expanded") minimise();
         break;
       default:
         return;
