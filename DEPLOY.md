@@ -110,6 +110,10 @@ API key `<your key>` → **Save**. The dot turns green when connected.
 - Narrow `host_permissions` in `manifest.json` from `<all_urls>` to what you need.
 - Kokoro 82M is small: one GPU serves many concurrent readers. A CPU server
   also works (about 7x real-time on an M-series Mac) if traffic is low.
+- Piper (German, Dutch, Polish and the other non-Kokoro languages) runs on CPU and is
+  fast, but its voices add about 3.2 GB to the image and up to about 1 GB of memory
+  (`PIPER_MAX_LOADED`, default 8 voices at once). To build with fewer languages:
+  `docker compose build --build-arg PIPER_LANGS="de nl"`, or `PIPER_LANGS=none` for none.
 
 ## Hostinger VPS (CPU, Ubuntu) with Docker Compose and automatic HTTPS
 
@@ -124,7 +128,9 @@ speech endpoint (text in URLs ends up in logs).
    ```bash
    cd ~/Documents/projects/kokoro-local
    ssh root@<VPS_IP> "mkdir -p /opt/voix"
-   scp -r Dockerfile .dockerignore server.py deploy root@<VPS_IP>:/opt/voix/
+   ssh root@<VPS_IP> "mkdir -p /opt/voix/scripts"
+   scp -r Dockerfile .dockerignore server.py voices.json deploy root@<VPS_IP>:/opt/voix/
+   scp scripts/download_piper_voices.py root@<VPS_IP>:/opt/voix/scripts/
    ```
 4. **Configure and start** on the VPS:
    ```bash
