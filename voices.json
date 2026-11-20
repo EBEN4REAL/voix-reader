@@ -1,0 +1,525 @@
+{
+  "version": 2,
+  "languages": [
+    {
+      "code": "en",
+      "name": "English",
+      "nativeName": "English",
+      "aliases": ["en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-IN", "en-NG", "en-ZA"],
+      "kokoroLang": "en-us",
+      "locale": "en-US",
+      "enabled": true,
+      "beta": false,
+      "voices": [
+        { "id": "af_heart", "gender": "female", "label": "Heart", "accent": "US" },
+        { "id": "af_bella", "gender": "female", "label": "Bella", "accent": "US" },
+        { "id": "af_nicole", "gender": "female", "label": "Nicole", "accent": "US" },
+        { "id": "af_sarah", "gender": "female", "label": "Sarah", "accent": "US" },
+        { "id": "af_nova", "gender": "female", "label": "Nova", "accent": "US" },
+        { "id": "af_sky", "gender": "female", "label": "Sky", "accent": "US" },
+        { "id": "af_jessica", "gender": "female", "label": "Jessica", "accent": "US" },
+        { "id": "af_river", "gender": "female", "label": "River", "accent": "US" },
+        { "id": "bf_emma", "gender": "female", "label": "Emma", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bf_isabella", "gender": "female", "label": "Isabella", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bf_alice", "gender": "female", "label": "Alice", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bf_lily", "gender": "female", "label": "Lily", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "am_eric", "gender": "male", "label": "Eric", "accent": "US" },
+        { "id": "am_michael", "gender": "male", "label": "Michael", "accent": "US" },
+        { "id": "am_adam", "gender": "male", "label": "Adam", "accent": "US" },
+        { "id": "am_liam", "gender": "male", "label": "Liam", "accent": "US" },
+        { "id": "am_echo", "gender": "male", "label": "Echo", "accent": "US" },
+        { "id": "am_onyx", "gender": "male", "label": "Onyx", "accent": "US" },
+        { "id": "am_puck", "gender": "male", "label": "Puck", "accent": "US" },
+        { "id": "bm_george", "gender": "male", "label": "George", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bm_daniel", "gender": "male", "label": "Daniel", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bm_lewis", "gender": "male", "label": "Lewis", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" },
+        { "id": "bm_fable", "gender": "male", "label": "Fable", "accent": "UK", "kokoroLang": "en-gb", "locale": "en-GB" }
+      ]
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "nativeName": "Español",
+      "aliases": ["es-ES", "es-MX", "es-419", "es-US", "es-AR", "es-CO"],
+      "kokoroLang": "es",
+      "locale": "es-ES",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ef_dora", "gender": "female", "label": "Dora" },
+        { "id": "em_alex", "gender": "male", "label": "Alex" },
+        { "id": "em_santa", "gender": "male", "label": "Santa" }
+      ]
+    },
+    {
+      "code": "fr",
+      "name": "French",
+      "nativeName": "Français",
+      "aliases": ["fr-FR", "fr-CA", "fr-BE", "fr-CH"],
+      "kokoroLang": "fr-fr",
+      "locale": "fr-FR",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ff_siwis", "gender": "female", "label": "Siwis" }
+      ]
+    },
+    {
+      "code": "it",
+      "name": "Italian",
+      "nativeName": "Italiano",
+      "aliases": ["it-IT", "it-CH"],
+      "kokoroLang": "it",
+      "locale": "it-IT",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "if_sara", "gender": "female", "label": "Sara" },
+        { "id": "im_nicola", "gender": "male", "label": "Nicola" }
+      ]
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "nativeName": "Português",
+      "aliases": ["pt-BR", "pt-PT"],
+      "kokoroLang": "pt-br",
+      "locale": "pt-BR",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "pf_dora", "gender": "female", "label": "Dora" },
+        { "id": "pm_alex", "gender": "male", "label": "Alex" },
+        { "id": "pm_santa", "gender": "male", "label": "Santa" }
+      ]
+    },
+    {
+      "code": "hi",
+      "name": "Hindi",
+      "nativeName": "हिन्दी",
+      "aliases": ["hi-IN"],
+      "kokoroLang": "hi",
+      "locale": "hi-IN",
+      "enabled": false,
+      "beta": true,
+      "voices": [
+        { "id": "hf_alpha", "gender": "female", "label": "Alpha" },
+        { "id": "hf_beta", "gender": "female", "label": "Beta" },
+        { "id": "hm_omega", "gender": "male", "label": "Omega" },
+        { "id": "hm_psi", "gender": "male", "label": "Psi" }
+      ]
+    },
+    {
+      "code": "ja",
+      "name": "Japanese",
+      "nativeName": "日本語",
+      "aliases": ["ja-JP"],
+      "kokoroLang": "ja",
+      "locale": "ja-JP",
+      "enabled": false,
+      "beta": true,
+      "voices": [
+        { "id": "jf_alpha", "gender": "female", "label": "Alpha" },
+        { "id": "jf_gongitsune", "gender": "female", "label": "Gongitsune" },
+        { "id": "jf_nezumi", "gender": "female", "label": "Nezumi" },
+        { "id": "jf_tebukuro", "gender": "female", "label": "Tebukuro" },
+        { "id": "jm_kumo", "gender": "male", "label": "Kumo" }
+      ]
+    },
+    {
+      "code": "zh",
+      "name": "Mandarin",
+      "nativeName": "中文",
+      "aliases": ["zh-CN", "zh-TW", "zh-HK", "zh-SG", "zh-Hans", "zh-Hant", "cmn"],
+      "kokoroLang": "cmn",
+      "locale": "zh-CN",
+      "enabled": false,
+      "beta": true,
+      "voices": [
+        { "id": "zf_xiaobei", "gender": "female", "label": "Xiaobei" },
+        { "id": "zf_xiaoni", "gender": "female", "label": "Xiaoni" },
+        { "id": "zf_xiaoxiao", "gender": "female", "label": "Xiaoxiao" },
+        { "id": "zf_xiaoyi", "gender": "female", "label": "Xiaoyi" },
+        { "id": "zm_yunjian", "gender": "male", "label": "Yunjian" },
+        { "id": "zm_yunxi", "gender": "male", "label": "Yunxi" },
+        { "id": "zm_yunxia", "gender": "male", "label": "Yunxia" },
+        { "id": "zm_yunyang", "gender": "male", "label": "Yunyang" }
+      ]
+    },
+    {
+      "code": "sq",
+      "name": "Albanian",
+      "nativeName": "Shqip",
+      "aliases": ["sq-AL"],
+      "locale": "sq-AL",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "sq_AL-edon-medium", "engine": "piper", "gender": "male", "label": "Edon", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "eu",
+      "name": "Basque",
+      "nativeName": "Euskara",
+      "aliases": ["eu-ES"],
+      "locale": "eu-ES",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "eu_ES-maider-medium", "engine": "piper", "gender": "female", "label": "Maider", "license": "CC BY 4.0" },
+        { "id": "eu_ES-antton-medium", "engine": "piper", "gender": "male", "label": "Antton", "license": "CC BY 4.0" }
+      ]
+    },
+    {
+      "code": "bn",
+      "name": "Bengali",
+      "nativeName": "বাংলা",
+      "aliases": ["bn-BD"],
+      "locale": "bn-BD",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "bn_BD-google-medium", "engine": "piper", "gender": "male", "label": "Google", "license": "CC BY-SA 4.0" }
+      ]
+    },
+    {
+      "code": "bg",
+      "name": "Bulgarian",
+      "nativeName": "Български",
+      "aliases": ["bg-BG"],
+      "locale": "bg-BG",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "bg_BG-dimitar-medium", "engine": "piper", "gender": "male", "label": "Dimitar", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "ca",
+      "name": "Catalan",
+      "nativeName": "Català",
+      "aliases": ["ca-ES"],
+      "locale": "ca-ES",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ca_ES-upc_ona-medium", "engine": "piper", "gender": "female", "label": "Ona", "license": "CC BY-SA 3.0" }
+      ]
+    },
+    {
+      "code": "cs",
+      "name": "Czech",
+      "nativeName": "Čeština",
+      "aliases": ["cs-CZ"],
+      "locale": "cs-CZ",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "cs_CZ-kasandra-medium", "engine": "piper", "gender": "female", "label": "Kasandra", "license": "CC BY 4.0" },
+        { "id": "cs_CZ-jirka-medium", "engine": "piper", "gender": "male", "label": "Jirka", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "da",
+      "name": "Danish",
+      "nativeName": "Dansk",
+      "aliases": ["da-DK"],
+      "locale": "da-DK",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "da_DK-talesyntese-medium", "engine": "piper", "gender": "male", "label": "Talesyntese", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "nl",
+      "name": "Dutch",
+      "nativeName": "Nederlands",
+      "aliases": ["nl-BE", "nl-NL"],
+      "locale": "nl-BE",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "nl_BE-nathalie-medium", "engine": "piper", "gender": "female", "label": "Nathalie", "license": "CC0", "accent": "BE", "locale": "nl-BE" },
+        { "id": "nl_NL-pim-medium", "engine": "piper", "gender": "male", "label": "Pim", "license": "CC0", "accent": "NL", "locale": "nl-NL" },
+        { "id": "nl_NL-ronnie-medium", "engine": "piper", "gender": "male", "label": "Ronnie", "license": "CC0", "accent": "NL", "locale": "nl-NL" }
+      ]
+    },
+    {
+      "code": "et",
+      "name": "Estonian",
+      "nativeName": "Eesti",
+      "aliases": ["et-EE"],
+      "locale": "et-EE",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "et_EE-news-medium", "engine": "piper", "gender": "male", "label": "News", "license": "CC BY" }
+      ]
+    },
+    {
+      "code": "fi",
+      "name": "Finnish",
+      "nativeName": "Suomi",
+      "aliases": ["fi-FI"],
+      "locale": "fi-FI",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "fi_FI-harri-medium", "engine": "piper", "gender": "male", "label": "Harri", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "nativeName": "Deutsch",
+      "aliases": ["de-DE"],
+      "locale": "de-DE",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "de_DE-kerstin-medium", "engine": "piper", "gender": "female", "label": "Kerstin", "license": "CC0" },
+        { "id": "de_DE-thorsten-medium", "engine": "piper", "gender": "male", "label": "Thorsten", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "el",
+      "name": "Greek",
+      "nativeName": "Ελληνικά",
+      "aliases": ["el-GR"],
+      "locale": "el-GR",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "el_GR-rapunzelina-medium", "engine": "piper", "gender": "female", "label": "Rapunzelina", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "hu",
+      "name": "Hungarian",
+      "nativeName": "Magyar",
+      "aliases": ["hu-HU"],
+      "locale": "hu-HU",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "hu_HU-anna-medium", "engine": "piper", "gender": "female", "label": "Anna", "license": "CC0" },
+        { "id": "hu_HU-imre-medium", "engine": "piper", "gender": "male", "label": "Imre", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "kk",
+      "name": "Kazakh",
+      "nativeName": "Қазақша",
+      "aliases": ["kk-KZ"],
+      "locale": "kk-KZ",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "kk_KZ-issai-high", "engine": "piper", "gender": "male", "label": "Issai", "license": "CC BY 4.0" }
+      ]
+    },
+    {
+      "code": "lv",
+      "name": "Latvian",
+      "nativeName": "Latviešu",
+      "aliases": ["lv-LV"],
+      "locale": "lv-LV",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "lv_LV-aivars-medium", "engine": "piper", "gender": "male", "label": "Aivars", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "mr",
+      "name": "Marathi",
+      "nativeName": "मराठी",
+      "aliases": ["mr-IN"],
+      "locale": "mr-IN",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "mr_IN-google-medium", "engine": "piper", "gender": "female", "label": "Google", "license": "CC BY-SA 4.0" }
+      ]
+    },
+    {
+      "code": "ne",
+      "name": "Nepali",
+      "nativeName": "नेपाली",
+      "aliases": ["ne-NP"],
+      "locale": "ne-NP",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ne_NP-google-medium", "engine": "piper", "gender": "female", "label": "Google", "license": "CC BY-SA 4.0" },
+        { "id": "ne_NP-chitwan-medium", "engine": "piper", "gender": "male", "label": "Chitwan", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "no",
+      "name": "Norwegian",
+      "nativeName": "Norsk",
+      "aliases": ["no-NO", "nb", "nn"],
+      "locale": "no-NO",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "no_NO-talesyntese-medium", "engine": "piper", "gender": "male", "label": "Talesyntese", "license": "CC0" },
+        { "id": "no_NO-nvcc-medium", "engine": "piper", "gender": "male", "label": "NVCC", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "fa",
+      "name": "Persian",
+      "nativeName": "فارسی",
+      "aliases": ["fa-IR"],
+      "locale": "fa-IR",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "fa_IR-ganji-medium", "engine": "piper", "gender": "male", "label": "Ganji", "license": "CC0" },
+        { "id": "fa_IR-amir-medium", "engine": "piper", "gender": "male", "label": "Amir", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "pl",
+      "name": "Polish",
+      "nativeName": "Polski",
+      "aliases": ["pl-PL"],
+      "locale": "pl-PL",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "pl_PL-gosia-medium", "engine": "piper", "gender": "female", "label": "Gosia", "license": "CC0" },
+        { "id": "pl_PL-darkman-medium", "engine": "piper", "gender": "male", "label": "Darkman", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "ro",
+      "name": "Romanian",
+      "nativeName": "Română",
+      "aliases": ["ro-RO"],
+      "locale": "ro-RO",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ro_RO-mihai-medium", "engine": "piper", "gender": "male", "label": "Mihai", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "ru",
+      "name": "Russian",
+      "nativeName": "Русский",
+      "aliases": ["ru-RU"],
+      "locale": "ru-RU",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ru_RU-dmitri-medium", "engine": "piper", "gender": "female", "label": "Dmitri", "license": "CC0" },
+        { "id": "ru_RU-denis-medium", "engine": "piper", "gender": "male", "label": "Denis", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "sk",
+      "name": "Slovak",
+      "nativeName": "Slovenčina",
+      "aliases": ["sk-SK"],
+      "locale": "sk-SK",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "sk_SK-lili-medium", "engine": "piper", "gender": "female", "label": "Lili", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "sl",
+      "name": "Slovenian",
+      "nativeName": "Slovenščina",
+      "aliases": ["sl-SI"],
+      "locale": "sl-SI",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "sl_SI-artur-medium", "engine": "piper", "gender": "male", "label": "Artur", "license": "CC BY 4.0" }
+      ]
+    },
+    {
+      "code": "sv",
+      "name": "Swedish",
+      "nativeName": "Svenska",
+      "aliases": ["sv-SE"],
+      "locale": "sv-SE",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "sv_SE-alma-medium", "engine": "piper", "gender": "female", "label": "Alma", "license": "CC BY 4.0" },
+        { "id": "sv_SE-nst-medium", "engine": "piper", "gender": "male", "label": "NST", "license": "CC0" }
+      ]
+    },
+    {
+      "code": "te",
+      "name": "Telugu",
+      "nativeName": "తెలుగు",
+      "aliases": ["te-IN"],
+      "locale": "te-IN",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "te_IN-padmavathi-medium", "engine": "piper", "gender": "female", "label": "Padmavathi", "license": "CC BY 4.0" },
+        { "id": "te_IN-venkatesh-medium", "engine": "piper", "gender": "male", "label": "Venkatesh", "license": "CC BY 4.0" }
+      ]
+    },
+    {
+      "code": "uk",
+      "name": "Ukrainian",
+      "nativeName": "Українська",
+      "aliases": ["uk-UA"],
+      "locale": "uk-UA",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "uk_UA-tetiana-high", "engine": "piper", "gender": "female", "label": "Tetiana", "license": "Apache-2.0" },
+        { "id": "uk_UA-mykyta-high", "engine": "piper", "gender": "male", "label": "Mykyta", "license": "Apache-2.0" }
+      ]
+    },
+    {
+      "code": "ur",
+      "name": "Urdu",
+      "nativeName": "اردو",
+      "aliases": ["ur-PK"],
+      "locale": "ur-PK",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "ur_PK-aegis_female-medium", "engine": "piper", "gender": "female", "label": "Aegis", "license": "MIT" },
+        { "id": "ur_PK-fasih-medium", "engine": "piper", "gender": "male", "label": "Fasih", "license": "MIT" }
+      ]
+    },
+    {
+      "code": "vi",
+      "name": "Vietnamese",
+      "nativeName": "Tiếng Việt",
+      "aliases": ["vi-VN"],
+      "locale": "vi-VN",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "vi_VN-vais1000-medium", "engine": "piper", "gender": "female", "label": "Vais", "license": "CC BY 4.0" }
+      ]
+    },
+    {
+      "code": "cy",
+      "name": "Welsh",
+      "nativeName": "Cymraeg",
+      "aliases": ["cy-GB"],
+      "locale": "cy-GB",
+      "enabled": true,
+      "beta": true,
+      "voices": [
+        { "id": "cy_GB-bu_tts-medium", "engine": "piper", "gender": "female", "label": "Bu", "license": "CC BY" }
+      ]
+    }
+  ]
+}
