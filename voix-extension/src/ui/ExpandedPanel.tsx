@@ -1,6 +1,8 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { MAX_SPEED, MIN_SPEED, type ReaderController, type ReaderState, type SettingKey } from "../controller/types";
+import { canStart } from "../lang/resolve";
 import type { DragHandlers } from "./hooks";
+import { LanguageChip, LanguagePicker, UnsupportedNotice } from "./Language";
 import {
   ChevronDownIcon, CloseIcon, InfoIcon, MinusIcon, PauseIcon, PlayIcon, PlusIcon,
   SkipBackIcon, SkipForwardIcon, StopIcon, VoixLogo,
@@ -19,9 +21,13 @@ interface Props {
 export const formatSpeed = (s: number) => `${s.toFixed(1)}×`;
 
 export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNotice, onDismissFallback, onMinimise, onClose }: Props) {
-  const { status, sentences, currentIndex, speed, usingFallbackVoice } = state;
+  const { status, sentences, currentIndex, speed, usingFallbackVoice, language } = state;
   const total = sentences.length;
   const preparing = status === "preparing";
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const focusChip = () => chipRef.current?.focus();
+  // Reading an unsupported language with the device voice is a choice, not a failure.
+  const unsupported = !!language && !language.supported;
 
   return (
     <section className="voix-panel" aria-label="Voix reader" tabIndex={-1}>
@@ -39,7 +45,7 @@ export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNot
       </header>
 
       <div className="voix-body">
-        {showFallbackNotice && (
+        {showFallbackNotice && !unsupported && (
           <div className="voix-notice" role="status">
             <div className="voix-notice-text">
               <InfoIcon />
@@ -71,6 +77,8 @@ export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNot
           </div>
         )}
 
+        <UnsupportedNotice state={state} controller={controller} onChooseLanguage={() => controller.openLanguagePicker()} />
+
         <div>
           <div className="voix-meta">
             <span aria-live="off">
@@ -90,7 +98,7 @@ export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNot
             onClick={() => controller.previous()} disabled={!total || preparing}>
             <SkipBackIcon />
           </button>
-          <PrimaryButton status={status} disabled={!total} controller={controller} />
+          <PrimaryButton status={status} disabled={!total || !canStart(state)} controller={controller} />
           <button type="button" className="voix-btn voix-btn-outline voix-btn-square"
             aria-label={preparing ? "Cancel" : "Stop"} onClick={() => controller.stop()} disabled={!total && !preparing}>
             <StopIcon />
@@ -101,7 +109,8 @@ export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNot
           </button>
         </div>
 
-        <VoiceSelect state={state} controller={controller} />
+        <VoiceSelect state={state} controller={controller} chipRef={chipRef} />
+        {state.languagePickerOpen && <LanguagePicker state={state} controller={controller} onDone={focusChip} />}
 
         <div>
           <div className="voix-label">
@@ -162,26 +171,41 @@ function PrimaryButton({ status, disabled, controller }: { status: ReaderState["
   );
 }
 
-function VoiceSelect({ state, controller }: { state: ReaderState; controller: ReaderController }) {
+export const voiceOptionLabel = (v: ReaderState["voices"][number]) =>
+  [v.label, v.accent, v.beta ? "Beta" : undefined].filter(Boolean).join(" · ");
+
+function VoiceSelect({ state, controller, chipRef }: {
+  state: ReaderState;
+  controller: ReaderController;
+  chipRef: RefObject<HTMLButtonElement>;
+}) {
   const groups = [
-    { label: "Women", voices: state.voices.filter((v) => v.gender === "woman") },
-    { label: "Men", voices: state.voices.filter((v) => v.gender === "man") },
-  ];
+    { label: "Women", voices: state.voices.filter((v) => v.gender === "female") },
+    { label: "Men", voices: state.voices.filter((v) => v.gender === "male") },
+  ].filter((g) => g.voices.length);
+  const current = state.voices.find((v) => v.id === state.voiceId);
   return (
     <div>
-      <div className="voix-label">
-        <label htmlFor="voix-voice">Voice</label>
+      <div className="voix-label voix-voice-head">
+        <span className="voix-label-group">
+          <label htmlFor="voix-voice">Voice</label>
+          {current?.beta && <span className="voix-beta">Beta</span>}
+        </span>
+        {state.multilingual && <LanguageChip ref={chipRef} state={state} controller={controller} />}
       </div>
-      <select id="voix-voice" className="voix-select" value={state.voiceId}
+      <select id="voix-voice" className="voix-select" value={state.voiceId} disabled={!state.voices.length}
         onChange={(e) => controller.setVoice(e.target.value)}>
+        {!state.voices.length && <option value="">No natural voice for this language</option>}
         {groups.map((g) => (
           <optgroup key={g.label} label={g.label}>
             {g.voices.map((v) => (
-              <option key={v.id} value={v.id}>{`${v.label} · ${v.accent}`}</option>
+              <option key={v.id} value={v.id}>{voiceOptionLabel(v)}</option>
             ))}
           </optgroup>
         ))}
       </select>
+      {/* Announced by the widget's live region. */}
+      {state.voiceNotice && <p className="voix-voice-notice">{state.voiceNotice}</p>}
     </div>
   );
 }
@@ -226,7 +250,7 @@ function SentenceList({ state, controller }: { state: ReaderState; controller: R
                 onClick={() => controller.jumpTo(i)}
               >
                 <span className="voix-sentence-num">{i + 1}.</span>
-                <span>{s.text}</span>
+                <span dir="auto">{s.text}</span>
               </button>
             </li>
           ))}
