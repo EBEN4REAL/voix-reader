@@ -20,6 +20,17 @@
         <p id="status" role="status"></p>
       </section>
 
+      <section id="languages">
+        <h2>Languages <span class="hint">(beta)</span></h2>
+        <label class="check">
+          <input id="multilingual" type="checkbox" />
+          <span>Detect each article's language and read it with a matching voice</span>
+        </label>
+        <p class="hint">Voices for languages other than English, such as Spanish, German or Dutch, are in beta.
+          When Voix isn't sure of the language it asks you first; a language you choose is remembered for that
+          website.</p>
+      </section>
+
       <section>
         <h2>Sites where Voix never offers to read</h2>
         <ul id="never"></ul>
@@ -53,7 +64,8 @@
         <p>Voix never sends text from email and banking sites, and it only reads a page when you press Listen,
           Play, the toolbar icon or the keyboard shortcut (Alt+Shift+V by default; change it at
           chrome://extensions/shortcuts).</p>
-        <p>Your settings (voice, speed, toggles, widget position) are stored in this browser only.</p>
+        <p>Your settings (voice, speed, toggles, widget position, and the language you chose for a website) are
+          stored in this browser only. The article's language is detected inside your browser.</p>
       </section>
     </main>
     <script type="module" src="./main.ts"></script>
