@@ -82,6 +82,19 @@ export const InfoIcon = () => (
 );
 
 /** The Voix mark. White V on deep sky blue (the only white-on-blue allowed: it's the logo). */
+export const CheckIcon = ({ size = 18 }: { size?: number }) => (
+  <Svg size={size}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" {...stroke} />
+  </Svg>
+);
+
+export const GlobeIcon = ({ size = 16 }: { size?: number }) => (
+  <Svg size={size}>
+    <circle cx="12" cy="12" r="9" {...stroke} strokeWidth={2} />
+    <path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z" {...stroke} strokeWidth={2} />
+  </Svg>
+);
+
 export function VoixLogo({ size = 32 }: { size?: number }) {
   const small = size <= 32;
   return (
