@@ -221,6 +221,118 @@ describe("Widget", () => {
     });
   });
 
+  describe("language", () => {
+    const detection = (lang: string, extra = {}) =>
+      ({ lang, confidence: 95, source: "text" as const, mixed: false, needsConfirm: false, ...extra });
+
+    it("shows the reading language beside the voice picker", () => {
+      const { controller } = setup();
+      act(() => controller.simulateDetection(detection("es")));
+      expect(screen.getByRole("button", { name: "Reading language: Spanish. Change" })).toHaveTextContent("Spanish");
+      const select = screen.getByLabelText("Voice");
+      expect(within(select).getByRole("option", { name: "Dora · Beta" })).toBeInTheDocument();
+      expect(within(select).getAllByRole("group").map((g) => g.getAttribute("label"))).toEqual(["Women", "Men"]);
+      expect(screen.getByText("Beta", { selector: ".voix-beta" })).toBeInTheDocument();
+    });
+
+    it("English voices carry no Beta tag", () => {
+      setup();
+      expect(screen.getByRole("button", { name: "Reading language: English. Change" })).toBeInTheDocument();
+      expect(screen.queryByText("Beta", { selector: ".voix-beta" })).not.toBeInTheDocument();
+    });
+
+    it("the chip opens a list of languages written in their own language, current one ticked", async () => {
+      const { controller, user } = setup();
+      act(() => controller.simulateDetection(detection("es")));
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      const picker = screen.getByRole("group", { name: "Reading language" });
+      const options = within(picker).getAllByRole("button").filter((b) => b.classList.contains("voix-picker-option"));
+      expect(options.map((o) => o.textContent)).toEqual(expect.arrayContaining(
+        ["DeutschBeta", "English", "EspañolBeta", "FrançaisBeta", "ItalianoBeta", "NederlandsBeta", "PortuguêsBeta"]));
+      expect(within(picker).getByRole("button", { name: /Español/ })).toHaveAttribute("aria-current", "true");
+      expect(within(picker).getByRole("button", { name: /Español/ })).toHaveFocus();
+      await user.click(within(picker).getByRole("button", { name: /Italiano/ }));
+      expect(screen.queryByRole("group", { name: "Reading language" })).not.toBeInTheDocument();
+      expect(controller.getState()).toMatchObject({ language: { code: "it", savedForSite: true }, voiceId: "if_sara" });
+      expect(screen.getByRole("button", { name: "Reading language: Italian. Change" })).toHaveFocus();
+    });
+
+    it("Reset forgets the site's choice", async () => {
+      const { controller, user } = setup();
+      act(() => controller.simulateDetection(detection("es")));
+      act(() => controller.setLanguage("fr"));
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      expect(screen.getByText("Remembered for this site.")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+      expect(controller.getState().language).toMatchObject({ code: "es", savedForSite: false });
+    });
+
+    it("asks before reading an uncertain language: chip has a question mark, Play opens the list", async () => {
+      const { controller, user } = setup();
+      act(() => controller.simulateDetection(detection("es", { confidence: 55, needsConfirm: true })));
+      expect(screen.getByRole("button", { name: /Reading language: Spanish, not confirmed/ })).toHaveTextContent("Spanish?");
+      await user.click(screen.getByRole("button", { name: "Play" }));
+      expect(screen.getByText("Which language is this?")).toBeInTheDocument();
+      expect(controller.getState().status).toBe("idle");
+      await user.click(screen.getByRole("button", { name: /Español/ }));
+      expect(controller.getState().status).toBe("preparing");
+    });
+
+    it("Escape closes the list before it minimises the widget", async () => {
+      const { controller, user } = setup();
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      await user.keyboard("{Escape}");
+      expect(controller.getState().languagePickerOpen).toBe(false);
+      expect(screen.getByRole("region", { name: "Voix reader" })).toBeInTheDocument();
+    });
+
+    it("unsupported language: says so, disables Play, offers another language and the device voice", async () => {
+      const { controller, user } = setup();
+      act(() => controller.simulateDetection(detection("tr")));
+      expect(screen.getByText("Voix cannot read Turkish yet")).toBeInTheDocument();
+      expect(document.querySelector("[aria-live='polite']")).toHaveTextContent("Voix cannot read Turkish yet.");
+      expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+      expect(screen.getByLabelText("Voice")).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Choose another language" }));
+      expect(screen.getByRole("group", { name: "Reading language" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Use my device voice" }));
+      expect(controller.getState()).toMatchObject({ usingFallbackVoice: true, status: "preparing" });
+      expect(screen.getByText("Reading Turkish with your device's voice")).toBeInTheDocument();
+      expect(screen.queryByText("Using your device's basic voice")).not.toBeInTheDocument();
+    });
+
+    it("only one gender available: one-line notice", () => {
+      const { controller } = setup();
+      act(() => controller.simulateDetection(detection("fr"), "male"));
+      expect(screen.getByText("Only a female voice is available for French.", { selector: ".voix-voice-notice" }))
+        .toBeInTheDocument();
+      expect(document.querySelector("[aria-live='polite']")).toHaveTextContent("Only a female voice is available for French.");
+      expect(within(screen.getByLabelText("Voice")).getAllByRole("group").map((g) => g.getAttribute("label"))).toEqual(["Women"]);
+    });
+
+    it("mixed-language text says so on the chip", () => {
+      const { controller } = setup();
+      act(() => controller.simulateDetection(detection("en", { mixed: true })));
+      expect(screen.getByRole("button", { name: "Reading language: English, mixed language. Change" }))
+        .toHaveTextContent("Mixed language");
+    });
+
+    it("minimising closes the language list, so the widget stays minimised", async () => {
+      const { controller, user } = setup();
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      await user.click(screen.getByRole("button", { name: "Minimise reader" }));
+      expect(controller.getState().languagePickerOpen).toBe(false);
+      expect(screen.getByRole("region", { name: "Voix reader (minimised)" })).toBeInTheDocument();
+    });
+
+    it("Play in the minimised pill opens the expanded panel when it needs a language", async () => {
+      const { controller, user } = setup("pill");
+      act(() => controller.simulateDetection(detection("it", { needsConfirm: true })));
+      await user.click(screen.getByRole("button", { name: "Play" }));
+      expect(screen.getByText("Which language is this?")).toBeInTheDocument();
+    });
+  });
+
   it("announces status changes politely", () => {
     const { controller } = setup();
     act(() => controller.play());
