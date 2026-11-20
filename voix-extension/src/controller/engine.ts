@@ -9,7 +9,14 @@ export interface PlayRequest {
   requestId: number;
   text: string;
   voiceId: string;
+  /** Registry language code sent to the voice service ("es"). */
   lang: string;
+  /** BCP 47 tag for the device voice ("es-ES", "en-GB"). */
+  deviceLang: string;
+  /** How the language was chosen (auto, html, user); the server logs it. */
+  langSource?: string;
+  /** The voice's engine on the server ("kokoro", "piper"). */
+  engine?: string;
   rate: number;
   /** Upcoming sentences to fetch ahead of time (natural engine only). */
   prefetch: string[];
@@ -17,7 +24,8 @@ export interface PlayRequest {
 
 export type EngineEvent =
   | { type: "playing" | "ended"; requestId: number }
-  | { type: "error"; requestId: number; message: string }
+  /** code: the voice service's error code (language_not_supported, voice_language_mismatch...). */
+  | { type: "error"; requestId: number; message: string; code?: string }
   /** Another tab took over audio playback. */
   | { type: "interrupted" }
   /** The player lost its state (e.g. Chrome closed the idle offscreen document); restart the sentence. */
@@ -30,6 +38,8 @@ export interface AudioEngine {
   stop(): void;
   setRate(rate: number): void;
   onEvent(listener: (e: EngineEvent) => void): () => void;
+  /** Whether this engine can speak a language (BCP 47). Engines without it are assumed to. */
+  supports?(lang: string): boolean;
 }
 
 // ---------- messages shared by content script, background and offscreen ----------
@@ -52,6 +62,10 @@ export interface ToBackground {
   frames?: FrameRequest;
   /** Fetch text with the extension's host permissions (cross-origin, with cookies). */
   fetchText?: string;
+  /** Run chrome.i18n.detectLanguage on this sample (for contexts that lack the API). */
+  detectLanguage?: string;
+  /** Get the voice registry from the server (at most daily, or now when force is set). */
+  registry?: { force: boolean };
 }
 
 export type FrameRequest =
@@ -122,6 +136,9 @@ export class ExtensionAudioEngine implements AudioEngine {
   onEvent(listener: (e: EngineEvent) => void) { return this.events.on(listener); }
 }
 
+const tag = (lang: string) => lang.toLowerCase().replace(/_/g, "-");
+const primary = (lang: string) => tag(lang).split("-")[0];
+
 /** Fallback: the browser's built-in voice. Rate changes apply from the next sentence. */
 export class SpeechSynthesisEngine implements AudioEngine {
   private events = new Emitter<EngineEvent>();
@@ -131,16 +148,36 @@ export class SpeechSynthesisEngine implements AudioEngine {
     return typeof speechSynthesis !== "undefined";
   }
 
+  /** Best installed voice for a language: exact tag first, local voices first. */
+  private static voiceFor(lang: string): SpeechSynthesisVoice | undefined {
+    const voices = speechSynthesis.getVoices();
+    const exact = voices.filter((v) => tag(v.lang) === tag(lang));
+    const sameLanguage = voices.filter((v) => primary(v.lang) === primary(lang));
+    return exact.find((v) => v.localService) ?? exact[0]
+      ?? sameLanguage.find((v) => v.localService) ?? sameLanguage[0];
+  }
+
+  supports(lang: string): boolean {
+    // Chrome loads its voice list lazily; while it is empty, let speak() try.
+    return !speechSynthesis.getVoices().length || !!SpeechSynthesisEngine.voiceFor(lang);
+  }
+
   play(req: PlayRequest) {
     this.current = req.requestId;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(req.text);
-    u.lang = req.lang;
-    u.rate = req.rate;
-    const voice = speechSynthesis.getVoices().find((v) => v.lang === req.lang && v.localService)
-      ?? speechSynthesis.getVoices().find((v) => v.lang.startsWith("en"));
-    if (voice) u.voice = voice;
     const id = req.requestId;
+    const voice = SpeechSynthesisEngine.voiceFor(req.deviceLang);
+    if (!voice && speechSynthesis.getVoices().length) {
+      // Never read a language with another language's voice: that is garbled audio.
+      queueMicrotask(() => id === this.current && this.events.emit({
+        type: "error", requestId: id, message: "This device has no voice for this language.",
+      }));
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(req.text);
+    u.lang = req.deviceLang;
+    u.rate = req.rate;
+    if (voice) u.voice = voice;
     u.onstart = () => id === this.current && this.events.emit({ type: "playing", requestId: id });
     u.onend = () => id === this.current && this.events.emit({ type: "ended", requestId: id });
     u.onerror = (e) => {
