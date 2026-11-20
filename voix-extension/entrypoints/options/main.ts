@@ -6,6 +6,7 @@ const apiKey = $<HTMLInputElement>("api-key");
 const status = $<HTMLParagraphElement>("status");
 const never = $<HTMLUListElement>("never");
 const neverEmpty = $<HTMLParagraphElement>("never-empty");
+const multilingual = $<HTMLInputElement>("multilingual");
 
 function setStatus(text: string, ok = true) {
   status.textContent = text;
@@ -33,9 +34,13 @@ async function renderNever() {
 $("save").onclick = async () => {
   const url = (server.value.trim() || DEFAULT_PREFS.serverUrl).replace(/\/+$/, "");
   server.value = url;
-  await savePrefs({ serverUrl: url, apiKey: apiKey.value.trim() });
+  const { serverUrl: before } = await loadPrefs(["serverUrl"]);
+  // Another server may read other languages: fetch its voice list next time.
+  await savePrefs({ serverUrl: url, apiKey: apiKey.value.trim(), ...(url !== before ? { registry: null } : {}) });
   setStatus("Saved.");
 };
+
+multilingual.onchange = () => void savePrefs({ multilingual: multilingual.checked });
 
 $("test").onclick = async () => {
   const url = (server.value.trim() || DEFAULT_PREFS.serverUrl).replace(/\/+$/, "");
@@ -51,9 +56,10 @@ $("test").onclick = async () => {
   }
 };
 
-void loadPrefs(["serverUrl", "apiKey"]).then((p) => {
+void loadPrefs(["serverUrl", "apiKey", "multilingual"]).then((p) => {
   server.value = p.serverUrl;
   apiKey.value = p.apiKey;
+  multilingual.checked = p.multilingual;
 });
 void renderNever();
 
