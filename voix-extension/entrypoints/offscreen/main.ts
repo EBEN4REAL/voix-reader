@@ -9,6 +9,8 @@ import { DocError, type DocEvent, type DocJob } from "../../src/docs/protocol";
 import { cleanOcrText } from "../../src/docs/text";
 
 const CACHE_LIMIT = 40;
+const REQUEST_TIMEOUT_MS = 15_000; // then offer the device voice
+const MAX_RETRY_WAIT_MS = 30_000;
 
 const audio = new Audio();
 audio.preservesPitch = true;
@@ -64,23 +66,56 @@ async function runJob(toTab: number, job: DocJob) {
 
 // ---------- audio ----------
 
-function fetchAudio(text: string, voiceId: string, server: { url: string; apiKey: string }): Promise<string> {
-  const { url: serverUrl, apiKey } = server;
-  const key = `${serverUrl}|${voiceId}|${text}`;
+/** A failed speech request; code is the voice service's error code (see server.py /v1/speak). */
+class SpeakFailure extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+  }
+}
+
+interface SpeechVoice {
+  voiceId: string;
+  lang: string;
+  engine?: string;
+  /** How the language was chosen; logged by the server. */
+  source?: string;
+}
+
+async function requestSpeech(text: string, { voiceId, lang, engine, source }: SpeechVoice, server: { url: string; apiKey: string }) {
+  const url = `${server.url.replace(/\/+$/, "")}/v1/speak`;
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(server.apiKey ? { Authorization: `Bearer ${server.apiKey}` } : {}) },
+        // Generated at 1.0x; speed is applied with playbackRate.
+        body: JSON.stringify({ text, voice: voiceId, lang, engine, response_format: "mp3", source }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (e) {
+      const timedOut = (e as Error)?.name === "TimeoutError";
+      throw new SpeakFailure(timedOut ? "The voice service took too long to answer" : "Voice service unavailable", "engine_unavailable");
+    }
+    if (res.ok) return res.blob();
+    const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string; detail?: string };
+    if (res.status === 429 && attempt === 0) {
+      // Rate limited: wait as long as the service asks (within reason), then try once more.
+      const wait = Number(res.headers.get("Retry-After")) * 1000;
+      await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(wait) && wait > 0 ? wait : 2000, MAX_RETRY_WAIT_MS)));
+      continue;
+    }
+    throw new SpeakFailure(body.message ?? body.detail ?? `Voice service error (HTTP ${res.status})`,
+      body.code ?? (res.status >= 500 ? "engine_unavailable" : undefined));
+  }
+}
+
+function fetchAudio(text: string, voice: SpeechVoice, server: { url: string; apiKey: string }): Promise<string> {
+  // Language is part of the key: the same text read under two languages is different audio.
+  const key = `${server.url}|${voice.lang}|${voice.voiceId}|${text}`;
   let entry = cache.get(key);
   if (!entry) {
-    entry = fetch(`${serverUrl.replace(/\/+$/, "")}/v1/audio/speech`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-      // Generated at 1.0x; speed is applied with playbackRate.
-      body: JSON.stringify({ input: text, voice: voiceId, response_format: "mp3" }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const detail = (await res.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(detail.detail ?? `Voice service error (HTTP ${res.status})`);
-      }
-      return URL.createObjectURL(await res.blob());
-    });
+    entry = requestSpeech(text, voice, server).then((blob) => URL.createObjectURL(blob));
     entry.catch(() => cache.delete(key));
     cache.set(key, entry);
     while (cache.size > CACHE_LIMIT) {
@@ -111,17 +146,20 @@ browser.runtime.onMessage.addListener((msg: ToOffscreen) => {
     const owner = msg.tabId;
     // requestIds are per tab, so "still current" means same tab and same id.
     const isCurrent = () => requestId === current && owner === tabId;
-    fetchAudio(c.text, c.voiceId, server)
+    const voice: SpeechVoice = { voiceId: c.voiceId, lang: c.lang, engine: c.engine, source: c.langSource };
+    fetchAudio(c.text, voice, server)
       .then(async (url) => {
         if (!isCurrent()) return; // superseded
-        for (const t of c.prefetch) fetchAudio(t, c.voiceId, server).catch(() => {});
+        for (const t of c.prefetch) fetchAudio(t, voice, server).catch(() => {});
         audio.src = url;
         audio.playbackRate = c.rate;
         audio.preservesPitch = true;
         if (!paused) await audio.play();
       })
       .catch((e: Error) => {
-        if (isCurrent()) emit({ type: "error", requestId, message: e.message || "Voice service unavailable" });
+        if (!isCurrent()) return;
+        const code = e instanceof SpeakFailure ? e.code : undefined;
+        emit({ type: "error", requestId, message: e.message || "Voice service unavailable", code });
       });
     return;
   }
