@@ -68,10 +68,36 @@ frame content script (every iframe): extraction + highlight for documents inside
 - `src/content/sessions.ts`: how each source follows the current sentence (DOM, frame, text-only).
 - PDF.js and Tesseract runtime files are copied into `public/vendor/` by `scripts/copy-vendor.mjs` (runs on
   install and before every build); nothing is loaded from a CDN.
-- `src/voices.json`: voice catalog (names, gender, accent) shown in the voice picker.
+- `src/lang/`: languages. `registry.ts` reads the voice registry (`../voices.json`, shared with the server) and
+  picks voices (`pickVoice`); `detect.ts` detects the article's language; `resolve.ts` decides the reading
+  language (a user's choice for the site, else detection); `remote.ts` keeps the server's copy of the registry.
 - Icons: SVG sources in `assets/icon/`, PNGs regenerated with `npm run icons`.
 - Font: Plus Jakarta Sans (OFL) bundled in `public/fonts/`, registered on the page with the FontFace
   API, because `@font-face` doesn't work inside a Shadow DOM.
+
+## Languages (beta)
+
+On by default since 1.2.0 (users can turn off **Detect each article's language** in Options; a build with
+`WXT_VOIX_MULTILINGUAL=0` starts with it off). With it on:
+
+- The article's language is detected from the extracted text (`chrome.i18n.detectLanguage`, offline), with
+  `<html lang>` and `og:locale` as weaker hints: the text wins, because many sites say `lang="en"` whatever they
+  publish. Each request carries the language (`lang: "es"`) and a voice of that language, in the user's
+  preferred gender where one exists.
+- A chip beside the voice picker shows the language ("Spanish"; "Spanish?" when unsure). It opens the list of
+  languages Voix can read, each in its own language. A choice is remembered for the website (Reset clears it)
+  and restarts reading from the start of the current paragraph.
+- Under 70% confidence or 200 characters, Play asks for the language first, unless it is one of the browser's
+  own languages (`navigator.languages`): a short English selection on an English browser just plays. A language Voix can't read
+  (Turkish, Yoruba...) gets "Voix cannot read Turkish yet", with another language or the device voice.
+- Enabled now: English, Spanish, French, Italian, Portuguese (Kokoro), plus 30 languages the server reads with
+  Piper, among them German, Dutch, Polish, Russian, Swedish and Ukrainian. All but English are marked Beta.
+  Hindi, Japanese and Mandarin are in the registry but disabled until they pass the listening check
+  (`../scripts/speak_all.ts`). Each voice carries its engine; the extension sends it with the request.
+- The registry is fetched from the server (`GET /v1/voices`) at most daily; the bundled copy covers offline use.
+  Single-page sites: the new article is re-read, and re-detected, after navigation.
+
+The dev page has a state for each language case.
 
 ## Tests
 
@@ -100,8 +126,8 @@ Screenshots land in `e2e/screenshots/`.
 
 ## Notes
 
-- Kokoro has US and UK English voices only; the brief's Nigerian-accent examples ("Ezinne", "Abeo")
-  have no Kokoro voice, so they are not in `voices.json`. Add entries there when a voice exists.
+- Neither Kokoro nor Piper has Nigerian-accent or Nigerian-language voices; the brief's examples ("Ezinne",
+  "Abeo") are Azure voices and are not in `voices.json`. Nigerian languages need another engine (Spitch).
 - The sensitive-site check (`src/page/sensitive.ts`) is a simple host list (email providers,
   payment sites, any host containing "bank"). Extend it before a public release.
 - `host_permissions` is `<all_urls>` so the prompt card can run on any article.
