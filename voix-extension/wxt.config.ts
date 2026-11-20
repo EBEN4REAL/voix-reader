@@ -1,4 +1,8 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "wxt";
+
+// The voice registry is shared with the server and lives at the repo root (one source of truth).
+const registry = fileURLToPath(new URL("../voices.json", import.meta.url));
 
 // Store builds (npm run zip:store) leave out the dev page and must name the voice server:
 // the deployed one over HTTPS, or the local one (http://127.0.0.1:8880) for a test release.
@@ -13,6 +17,8 @@ if (store && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$))/.tes
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  // Let the dev server read the registry outside this folder (builds bundle it either way).
+  vite: () => ({ server: { fs: { allow: [".", registry] } } }),
   filterEntrypoints: store ? ["background", "content", "frame", "offscreen", "options"] : undefined,
   outDir: store ? ".output-store" : ".output", // never overwrite the unpacked dev build
   manifest: {
