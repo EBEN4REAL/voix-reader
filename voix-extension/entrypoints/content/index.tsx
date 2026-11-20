@@ -5,8 +5,10 @@ import { VoixReaderController } from "../../src/controller/reader";
 import type { ReaderState } from "../../src/controller/types";
 import { bytesToBase64, type DocEvent } from "../../src/docs/protocol";
 import {
-  estimateMinutes, googleExportUrl, plainTextParagraphs, sheetParagraphs, splitSentences, type GoogleKind,
+  estimateMinutes, googleExportUrl, plainTextParagraphs, sheetParagraphs, splitParagraphs, type GoogleKind,
 } from "../../src/docs/text";
+import { browserLanguages, decide, detectLanguage, htmlLanguage, type Detection } from "../../src/lang/detect";
+import { requestRegistry, storedRegistry } from "../../src/lang/remote";
 import {
   findEmbeddedPdf, hasLargeCanvas, isPdfDocument, isPlainTextDocument, PageText,
 } from "../../src/page/extract";
@@ -21,6 +23,9 @@ import "../../src/ui/widget.css";
 const PROMPT_MIN_CHARS = 1500; // only offer to read real articles
 const PROMPT_DELAY_MS = 1500;
 const FRAME_MIN_CHARS = 400; // an iframe with this much text is treated as the document (ads have far less)
+const SPA_CHECKS_MS = [800, 2500]; // after a single-page-app navigation, look for the new article then
+
+const primaryLang = (tag?: string | null) => tag?.toLowerCase().split("-")[0];
 
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -34,9 +39,31 @@ export default defineContentScript({
     const controller = new VoixReaderController(
       new ExtensionAudioEngine(),
       SpeechSynthesisEngine.available() ? new SpeechSynthesisEngine() : null,
+      { site: location.hostname, refreshRegistry: () => requestRegistry(true) },
     );
-    void controller.loadPrefs();
+    const ready = controller.loadPrefs();
     const lang = document.documentElement.lang || undefined;
+
+    // The voice registry: the stored copy now, the server's when the stored one is a day old.
+    let registryLoaded: Promise<void> | null = null;
+    const ensureRegistry = () => (registryLoaded ??= storedRegistry().then(({ registry, stale }) => {
+      controller.setRegistry(registry);
+      if (stale) void requestRegistry(false).then((fresh) => fresh && controller.setRegistry(fresh));
+    }).catch(() => {})); // the bundled registry is already in use
+
+    /** Language of the text about to be read; null when detection is switched off. */
+    async function detectFor(texts: string[]): Promise<Detection | null> {
+      await Promise.all([ready.catch(() => {}), ensureRegistry()]);
+      if (!controller.getState().multilingual) return null;
+      try {
+        return await detectLanguage(texts);
+      } catch {
+        return decide(null, htmlLanguage(), 0, browserLanguages()); // unknown: asked, unless it's their language
+      }
+    }
+
+    /** Language to split sentences with: the detected one when sure, else the page's own. */
+    const splitLocale = (d: Detection | null) => (d?.lang && !d.needsConfirm ? d.lang : lang);
 
     let session: Session = TEXT_ONLY;
     let activeJob: string | null = null;
@@ -83,36 +110,68 @@ export default defineContentScript({
 
     // ----- sources -----
 
-    const toSentences = (texts: string[], offset = 0) => texts.map((text, i) => ({ id: `s${offset + i}`, text }));
+    const toSentences = (items: { text: string; para?: number }[], offset = 0) =>
+      items.map(({ text, para }, i) => ({ id: `s${offset + i}`, text, para }));
+
+    /** The page's article is what's being read (re-read it after single-page-app navigation). */
+    let articleText: string | null = null;
 
     function begin(next: Session): number {
       if (activeJob) jobs.cancel(activeJob);
       activeJob = null;
+      articleText = null;
       session.clear();
       session = next;
       ui.set({ card: null, mode: "expanded" });
       return ++generation;
     }
 
-    /** Text already in the page (or an iframe): highlightable. */
-    function readTexts(texts: string[], next: Session) {
-      begin(next);
-      controller.load(toSentences(texts));
-      controller.play();
+    /**
+     * Text already in the page (or an iframe): highlightable. source: the PageText it came from,
+     * so it can be split again with the detected language and keeps its paragraphs.
+     */
+    async function readTexts(texts: string[], next: Session, opts: { source?: PageText; article?: boolean; autoplay?: boolean } = {}) {
+      const gen = begin(next);
+      controller.stop(); // the previous text mustn't play on while the new one's language is detected
+      if (opts.article) articleText = texts.join(" ");
+      const detection = await detectFor(texts);
+      if (gen !== generation) return;
+      const { source } = opts;
+      const locale = splitLocale(detection);
+      if (source && locale && primaryLang(locale) !== primaryLang(lang)) texts = source.resplit(locale);
+      const paras = source?.paragraphIndexes();
+      controller.load(toSentences(texts.map((text, i) => ({ text, para: paras?.[i] }))), detection);
+      if (opts.autoplay !== false) controller.play();
     }
 
-    /** Streams sentences from a document job into the reader. */
+    /** Streams sentences from a document job into the reader, detecting the language on the first text. */
     function jobHandler(gen: number, emptyMessage: string) {
       let count = 0;
-      return (e: DocEvent) => {
+      let paras = 0;
+      let locale = lang;
+      let detected = false;
+      let queue = Promise.resolve();
+      const handle = async (e: DocEvent) => {
         if (gen !== generation) return;
         if (e.type === "progress") controller.setLoadingMessage(e.message);
         else if (e.type === "paragraphs") {
-          const sentences = splitSentences(e.paragraphs, lang);
+          if (!detected) {
+            detected = true;
+            const detection = await detectFor(e.paragraphs);
+            if (gen !== generation) return;
+            controller.applyDetection(detection);
+            locale = splitLocale(detection);
+          }
+          const sentences = splitParagraphs(e.paragraphs, locale, paras);
+          paras += e.paragraphs.length;
           controller.append(toSentences(sentences, count));
           count += sentences.length;
         } else if (e.type === "done") controller.finishLoading(emptyMessage);
         else if (e.type === "error") controller.fail(e.message);
+      };
+      // In order: detection is async, and later pages must not overtake the first.
+      return (e: DocEvent) => {
+        queue = queue.then(() => handle(e)).catch(() => {});
       };
     }
 
@@ -177,9 +236,12 @@ export default defineContentScript({
       try {
         const text = await fetchText(g.url);
         const paragraphs = g.kind === "spreadsheets" ? sheetParagraphs(text) : plainTextParagraphs(text);
-        const sentences = splitSentences(paragraphs, lang);
-        if (!sentences.length) throw new Error("empty");
+        if (!paragraphs.length) throw new Error("empty");
+        const detection = await detectFor(paragraphs);
         if (gen !== generation) return;
+        const sentences = splitParagraphs(paragraphs, splitLocale(detection));
+        if (!sentences.length) throw new Error("empty");
+        controller.applyDetection(detection);
         controller.append(toSentences(sentences));
         controller.finishLoading();
       } catch {
@@ -198,16 +260,16 @@ export default defineContentScript({
     async function readBest() {
       const sel = liveSelection();
       const selected = sel && page.extract("selection", sel);
-      if (selected) return readTexts(selected, new DomSession(page));
+      if (selected) return readTexts(selected, new DomSession(page), { source: page });
       if (isPdfDocument()) return readPdf(location.href);
       const google = googleExportUrl(location.href);
       if (google) return readGoogle(google);
       if (isPlainTextDocument()) {
         const texts = page.extract("plain");
-        if (texts) return readTexts(texts, new DomSession(page));
+        if (texts) return readTexts(texts, new DomSession(page), { source: page });
       }
       const article = page.extract("article");
-      if (article) return readTexts(article, new DomSession(page));
+      if (article) return readTexts(article, new DomSession(page), { source: page, article: true });
       const frame = await bestFrame(FRAME_MIN_CHARS);
       if (frame) return readTexts(frame.texts, new FrameSession(frame.frameId));
       const pdf = findEmbeddedPdf();
@@ -219,7 +281,7 @@ export default defineContentScript({
       const texts = page.extract("page");
       const chars = texts?.join(" ").length ?? 0;
       // A few toolbar labels around a big canvas: the document itself is drawn, not text.
-      if (texts && !(chars < 300 && hasLargeCanvas())) return readTexts(texts, new DomSession(page));
+      if (texts && !(chars < 300 && hasLargeCanvas())) return readTexts(texts, new DomSession(page), { source: page });
       const frame = await bestFrame(1);
       if (frame) return readTexts(frame.texts, new FrameSession(frame.frameId));
       const pdf = findEmbeddedPdf();
@@ -268,7 +330,7 @@ export default defineContentScript({
       },
       onReadSelection: () => {
         const texts = page.extract("selection", lastSelection);
-        if (texts) readTexts(texts, new DomSession(page));
+        if (texts) void readTexts(texts, new DomSession(page), { source: page });
       },
       onReadWholePage: () => void readWholePage(),
       onClose: close,
@@ -293,6 +355,26 @@ export default defineContentScript({
       if (msg?.type === "voix:toggle") {
         if (isOpen()) close();
         else void open();
+      }
+    });
+
+    // Single-page sites change the article without a page load: read the new one, in its language.
+    ctx.addEventListener(window, "wxt:locationchange", ({ newUrl, oldUrl }) => {
+      if (newUrl.pathname === oldUrl.pathname && newUrl.search === oldUrl.search) return; // in-page link
+      if (articleText === null || !isOpen()) return;
+      const gen = generation;
+      for (const ms of SPA_CHECKS_MS) {
+        ctx.setTimeout(() => {
+          if (gen !== generation || articleText === null || !isOpen()) return; // already re-read, or closed
+          // A separate extractor: the one being read keeps its sentences until the article really changed.
+          const probe = new PageText();
+          const texts = probe.extract("article");
+          if (!texts || texts.join(" ") === articleText) return;
+          const { status } = controller.getState();
+          void readTexts(texts, new DomSession(probe), {
+            source: probe, article: true, autoplay: status === "playing" || status === "preparing",
+          });
+        }, ms);
       }
     });
 
