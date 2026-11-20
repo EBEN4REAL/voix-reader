@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildLines, buildParagraphs, learnRunningLines, stripFurniture, type TextItem } from "../src/docs/pdfLayout";
 import {
-  cleanOcrText, googleExportUrl, joinLines, parseCsv, plainTextParagraphs, sheetParagraphs, splitSentences,
+  cleanOcrText, googleExportUrl, joinLines, MAX_CHUNK_CHARS, parseCsv, plainTextParagraphs, sentenceSpans, sheetParagraphs,
+  splitParagraphs, splitSentences,
 } from "../src/docs/text";
 
 describe("text helpers", () => {
@@ -86,5 +87,54 @@ describe("PDF layout", () => {
     ]);
     const numbered = { height: 842, lines: buildLines([item("Real sentence here.", 72, 700), item("- 7 -", 300, 30), item("Page 7 of 9", 300, 20)]) };
     expect(stripFurniture(numbered, new Set()).map((l) => l.text)).toEqual(["Real sentence here."]);
+  });
+});
+
+describe("chunking for the voice service", () => {
+  // Sentences of 40 to 120 characters, so they never line up with the 800 limit.
+  const ja = Array.from({ length: 60 }, (_, i) => "今日は新しい政策について話します" + "とても".repeat(i % 30) + "。").join("");
+  const zh = Array.from({ length: 60 }, (_, i) => "今天我们讨论新的经济政策" + "非常".repeat(i % 30) + "！").join("");
+
+  it.each([["ja", ja], ["zh", zh]])("%s: chunks of at most 800 characters, each a whole sentence", (lang, text) => {
+    const chunks = splitSentences([text], lang);
+    expect(chunks.length).toBeGreaterThan(50);
+    for (const c of chunks) {
+      expect(c.length).toBeLessThanOrEqual(MAX_CHUNK_CHARS);
+      expect(c).toMatch(/[。！]$/u); // ends where a sentence ends
+    }
+    expect(chunks.join("")).toBe(text);
+  });
+
+  it("breaks a sentence only when it alone is over the limit, at a clause boundary", () => {
+    const clause = "これは非常に長い文の一部です、";
+    const long = clause.repeat(80) + "終わり。";
+    const chunks = splitSentences([long], "ja");
+    expect(long.length).toBeGreaterThan(MAX_CHUNK_CHARS);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks.slice(0, -1)) {
+      expect(c.length).toBeLessThanOrEqual(MAX_CHUNK_CHARS);
+      expect(c.endsWith("、")).toBe(true);
+    }
+    expect(chunks.join("")).toBe(long);
+  });
+
+  it("breaks an over-long English sentence after a comma, else at a space", () => {
+    const long = "one two three four five, ".repeat(50) + "end.";
+    const spans = sentenceSpans(long, "en");
+    expect(spans.length).toBeGreaterThan(1);
+    for (const [a, b] of spans) expect(b - a).toBeLessThanOrEqual(MAX_CHUNK_CHARS);
+    expect(long.slice(spans[0]![0], spans[0]![1]).trimEnd().endsWith(",")).toBe(true);
+    const words = "word ".repeat(400);
+    for (const [a, b] of sentenceSpans(words, "en")) expect(b - a).toBeLessThanOrEqual(MAX_CHUNK_CHARS);
+  });
+
+  it("keeps the paragraph of each sentence", () => {
+    expect(splitParagraphs(["Uno. Dos.", "Tres."], "es", 4)).toEqual([
+      { text: "Uno.", para: 4 }, { text: "Dos.", para: 4 }, { text: "Tres.", para: 5 },
+    ]);
+  });
+
+  it("survives a malformed page language", () => {
+    expect(splitSentences(["One. Two."], "not a tag!")).toEqual(["One.", "Two."]);
   });
 });
