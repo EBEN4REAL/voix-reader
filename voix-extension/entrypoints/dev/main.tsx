@@ -2,6 +2,7 @@
 // with buttons to trigger every state in the design brief.
 import ReactDOM from "react-dom/client";
 import { MockReaderController } from "../../src/controller/mock";
+import type { Detection } from "../../src/lang/detect";
 import { loadVoixFont } from "../../src/ui/font";
 import { UiStore, type WidgetActions } from "../../src/ui/uiStore";
 import { Widget } from "../../src/ui/Widget";
@@ -9,6 +10,8 @@ import { clearHighlight, highlightRange } from "../../src/page/highlight";
 import css from "../../src/ui/widget.css?inline";
 
 const controller = new MockReaderController();
+const detected = (lang: string, extra: Partial<Detection> = {}): Detection =>
+  ({ lang, confidence: 95, source: "text", mixed: false, needsConfirm: false, ...extra });
 const ui = new UiStore();
 
 const actions: WidgetActions = {
@@ -62,6 +65,14 @@ const STATES: [string, () => void][] = [
   ["Error", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateError(); }],
   ["Close", () => actions.onClose()],
   ["Reading sentence 5/12", () => { ui.set({ card: null, mode: "expanded" }); controller.jumpTo(4); }],
+  ["Language · Spanish (detected)", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("es")); }],
+  ["Language · not sure (Spanish?)", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("es", { confidence: 55, needsConfirm: true })); }],
+  ["Language · German (Piper)", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("de")); }],
+  ["Language · unsupported (Turkish)", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("tr")); }],
+  ["Language · French, prefers a man's voice", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("fr"), "male"); }],
+  ["Language · mixed (English)", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("en", { mixed: true })); }],
+  ["Language · picker open", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("pt")); controller.openLanguagePicker(); }],
+  ["Language · back to English", () => { ui.set({ card: null, mode: "expanded" }); controller.simulateDetection(detected("en")); }],
 ];
 
 const dev = document.getElementById("dev")!;
