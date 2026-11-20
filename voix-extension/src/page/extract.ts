@@ -33,6 +33,8 @@ export interface Chunk {
   pieces: Piece[];
   start: number;
   end: number;
+  /** Index of the paragraph the sentence is in. */
+  para: number;
 }
 
 export type ExtractMode = "article" | "page" | "selection" | "plain";
@@ -128,6 +130,8 @@ export function hasLargeCanvas(doc: Document = document): boolean {
 
 export class PageText {
   private chunks: Chunk[] = [];
+  private paragraphs: Paragraph[] = [];
+  private lang: string | undefined;
   private blockCache = new Map<Element, boolean>();
   private visibleCache = new Map<Element, boolean>();
 
@@ -148,8 +152,27 @@ export class PageText {
       root = mode === "article" ? findArticle() : document.body;
     }
     if (!root) return null;
-    this.chunks = this.collect(root, range ?? null, skip).flatMap((p) => this.split(p));
+    this.lang = document.documentElement.lang || undefined;
+    this.paragraphs = this.collect(root, range ?? null, skip);
+    this.chunks = this.paragraphs.flatMap((p, i) => this.split(p, i));
     return this.chunks.length ? this.chunks.map((c) => c.text) : null;
+  }
+
+  /**
+   * Split the last extracted text again with another language's sentence rules (the detected
+   * language, when the page declares a different one). Returns the new sentence texts.
+   */
+  resplit(lang: string): string[] {
+    if (lang !== this.lang) {
+      this.lang = lang;
+      this.chunks = this.paragraphs.flatMap((p, i) => this.split(p, i));
+    }
+    return this.chunks.map((c) => c.text);
+  }
+
+  /** Paragraph index of each sentence from the last extract(). */
+  paragraphIndexes(): number[] {
+    return this.chunks.map((c) => c.para);
   }
 
   /** DOM range covering a sentence, or null if the page changed underneath us. */
@@ -248,16 +271,16 @@ export class PageText {
   }
 
   /** One chunk per sentence: matches the sentence list in the widget and keeps audio requests short. */
-  private split(par: Paragraph): Chunk[] {
+  private split(par: Paragraph, para: number): Chunk[] {
     const out: Chunk[] = [];
     // A single line break (source formatting, hard-wrapped text) is not a sentence end; a blank
     // line is. Same-length replacement keeps offsets aligned with the DOM text.
     const text = par.text.replace(/(?<!\n)\n(?!\n)/g, " ");
-    for (const [start, end] of sentenceSpans(text, document.documentElement.lang || undefined)) {
+    for (const [start, end] of sentenceSpans(text, this.lang)) {
       const segment = text.slice(start, end);
       const clean = segment.replace(/\s+/g, " ").trim();
       if (/[\p{L}\p{N}]/u.test(clean)) {
-        out.push({ text: clean, pieces: par.pieces, start, end: start + segment.trimEnd().length });
+        out.push({ text: clean, pieces: par.pieces, start, end: start + segment.trimEnd().length, para });
       }
     }
     return out;
