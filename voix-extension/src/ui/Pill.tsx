@@ -1,4 +1,5 @@
 import type { ReaderController, ReaderState } from "../controller/types";
+import { canStart } from "../lang/resolve";
 import type { DragHandlers } from "./hooks";
 import { ChevronUpIcon, PauseIcon, PlayIcon, VoixLogo } from "./Icons";
 
@@ -23,7 +24,7 @@ export function Pill({ state, controller, dragHandlers, onExpand }: {
     <section className="voix-pill" aria-label="Voix reader (minimised)" tabIndex={-1} {...dragHandlers}>
       <VoixLogo size={32} />
       <button type="button" className="voix-pill-play" aria-label={playing ? "Pause" : "Play"}
-        onClick={() => (playing ? controller.pause() : controller.play())} disabled={!total}>
+        onClick={() => (playing ? controller.pause() : controller.play())} disabled={!total || !canStart(state)}>
         {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
       </button>
       <div className="voix-pill-text">
