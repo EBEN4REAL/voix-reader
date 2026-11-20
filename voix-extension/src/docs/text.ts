@@ -15,28 +15,75 @@ export function endsWithAbbreviation(segment: string): boolean {
   return ABBREVIATION_END.test(segment);
 }
 
-/** Sentence segments of one paragraph as [start, end) offsets, abbreviation splits merged. */
-export function sentenceSpans(text: string, lang?: string): [number, number][] {
-  const spans: [number, number][] = [];
+/** Longest text sent to the voice service in one request (its limit is 1,000). */
+export const MAX_CHUNK_CHARS = 800;
+
+// Where an over-long sentence may break, best first: after clause punctuation (Latin, CJK,
+// Devanagari), then at a space. The last match before the limit wins.
+const CLAUSE_BREAK = /[,;:\u2013\u2014\u3001\uFF0C\uFF1B\uFF1A\u0964\u0965]\s*/gu;
+const SPACE_BREAK = /\s+/gu;
+
+/** Where to end a piece of text[start, end) so it fits the limit (end itself if it already does). */
+function breakBefore(text: string, start: number, end: number, max: number): number {
+  if (end - start <= max) return end;
+  const window = text.slice(start, start + max);
+  for (const re of [CLAUSE_BREAK, SPACE_BREAK]) {
+    let cut = -1;
+    for (const m of window.matchAll(re)) {
+      const at = m.index! + m[0].length;
+      if (at > max / 4 && at < window.length) cut = at; // not a tiny first piece
+    }
+    if (cut > 0) return start + cut;
+  }
+  return start + max; // one unbroken run of characters: cut it
+}
+
+/**
+ * Sentence segments of one paragraph as [start, end) offsets, abbreviation splits merged.
+ * Segmented with the reading language's rules (lang), which also handles Japanese and Chinese,
+ * where sentences have no spaces. A sentence is only ever broken when it is longer than
+ * maxChars, and then at a clause boundary where possible.
+ */
+export function sentenceSpans(text: string, lang?: string, maxChars = MAX_CHUNK_CHARS): [number, number][] {
+  const sentences: [number, number][] = [];
   let open = false;
-  for (const { segment, index } of new Intl.Segmenter(lang, { granularity: "sentence" }).segment(text)) {
+  let segmenter: Intl.Segmenter;
+  try {
+    segmenter = new Intl.Segmenter(lang, { granularity: "sentence" });
+  } catch {
+    segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" }); // malformed page lang
+  }
+  for (const { segment, index } of segmenter.segment(text)) {
     const end = index + segment.length;
-    if (open && spans.length) spans[spans.length - 1]![1] = end;
-    else spans.push([index, end]);
+    if (open && sentences.length) sentences[sentences.length - 1]![1] = end;
+    else sentences.push([index, end]);
     open = endsWithAbbreviation(segment);
+  }
+  const spans: [number, number][] = [];
+  for (const [start, end] of sentences) {
+    for (let from = start; from < end;) {
+      const to = breakBefore(text, from, end, maxChars);
+      spans.push([from, to]);
+      from = to;
+    }
   }
   return spans;
 }
 
 /** Split paragraphs into sentences, dropping fragments with no letters or digits. */
 export function splitSentences(paragraphs: string[], lang?: string): string[] {
-  const out: string[] = [];
-  for (const p of paragraphs) {
+  return splitParagraphs(paragraphs, lang).map((s) => s.text);
+}
+
+/** Like splitSentences, keeping the index of the paragraph each sentence came from. */
+export function splitParagraphs(paragraphs: string[], lang?: string, firstPara = 0): { text: string; para: number }[] {
+  const out: { text: string; para: number }[] = [];
+  paragraphs.forEach((p, i) => {
     for (const [start, end] of sentenceSpans(p, lang)) {
-      const s = p.slice(start, end).replace(/\s+/g, " ").trim();
-      if (HAS_WORD.test(s)) out.push(s);
+      const text = p.slice(start, end).replace(/\s+/g, " ").trim();
+      if (HAS_WORD.test(text)) out.push({ text, para: firstPara + i });
     }
-  }
+  });
   return out;
 }
 
