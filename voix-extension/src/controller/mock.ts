@@ -1,6 +1,8 @@
-import { VOICES, DEFAULT_VOICE } from "../voices";
+import type { Detection } from "../lang/detect";
+import { BUNDLED_REGISTRY, DEFAULT_GENDER, findLanguage, isReadable, type Gender } from "../lang/registry";
+import { languageOptions, resolveLanguage, voiceState } from "../lang/resolve";
 import { StateStore } from "./store";
-import { clampSpeed, type ReaderController, type Sentence, type SettingKey } from "./types";
+import { clampSpeed, type ReaderController, type ReaderState, type Sentence, type SettingKey } from "./types";
 
 export const SAMPLE_ARTICLE: Sentence[] = [
   "The Quiet Return of the Long Read",
@@ -24,12 +26,19 @@ export interface MockOptions {
   preparingMs?: number;
 }
 
+const ENGLISH: Detection = { lang: "en", confidence: 99, source: "text", mixed: false, needsConfirm: false };
+
 /** Simulated reader that advances through a sample article on a timer. */
 export class MockReaderController extends StateStore implements ReaderController {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private started = false;
   private readonly sentenceMs: number;
   private readonly preparingMs: number;
+  private detection: Detection = ENGLISH;
+  private siteChoice: string | undefined;
+  private gender: Gender = DEFAULT_GENDER;
+  private voiceByLang: Record<string, string> = {};
+  private playAfterPick = false;
 
   constructor(opts: MockOptions = {}) {
     super({
@@ -37,18 +46,30 @@ export class MockReaderController extends StateStore implements ReaderController
       sentences: opts.sentences ?? SAMPLE_ARTICLE,
       currentIndex: 0,
       speed: 1,
-      voiceId: DEFAULT_VOICE,
-      voices: VOICES,
+      voiceId: "",
+      voices: [],
       usingFallbackVoice: false,
       settings: { highlightOnPage: true, autoScroll: true },
+      multilingual: true,
+      languages: languageOptions(BUNDLED_REGISTRY),
+      language: null,
+      languagePickerOpen: false,
+      deviceVoiceAvailable: true,
     });
     this.sentenceMs = opts.sentenceMs ?? 2600;
     this.preparingMs = opts.preparingMs ?? 1400;
+    this.resolve();
   }
 
   play(): void {
-    const { status } = this.state;
-    if (status === "playing" || status === "preparing") return;
+    const { status, language } = this.state;
+    if (status === "playing" || status === "preparing" || !language) return;
+    if (language.needsConfirm) {
+      this.playAfterPick = true;
+      this.update({ languagePickerOpen: true });
+      return;
+    }
+    if (!language.supported && !this.state.usingFallbackVoice) return;
     if (!this.started) {
       this.update({ status: "preparing", error: undefined });
       this.schedule(this.preparingMs, () => {
@@ -100,7 +121,44 @@ export class MockReaderController extends StateStore implements ReaderController
   }
 
   setVoice(voiceId: string): void {
-    if (this.state.voices.some((v) => v.id === voiceId)) this.update({ voiceId });
+    const voice = this.state.voices.find((v) => v.id === voiceId);
+    const lang = this.state.language?.code;
+    if (!voice || !lang) return;
+    this.gender = voice.gender;
+    this.voiceByLang = { ...this.voiceByLang, [lang]: voiceId };
+    this.update({ voiceId, voiceNotice: undefined });
+  }
+
+  setLanguage(code: string): void {
+    const entry = findLanguage(code, BUNDLED_REGISTRY);
+    if (!isReadable(entry)) return;
+    this.siteChoice = entry.code;
+    const start = this.playAfterPick;
+    this.playAfterPick = false;
+    this.update({ languagePickerOpen: false, usingFallbackVoice: false });
+    this.resolve();
+    if (start) this.play();
+  }
+
+  openLanguagePicker(): void {
+    this.update({ languagePickerOpen: true });
+  }
+
+  closeLanguagePicker(): void {
+    this.playAfterPick = false;
+    this.update({ languagePickerOpen: false });
+  }
+
+  resetSiteLanguage(): void {
+    this.siteChoice = undefined;
+    this.update({ languagePickerOpen: false });
+    this.resolve();
+  }
+
+  useDeviceVoice(): void {
+    if (this.state.language?.supported) return;
+    this.update({ usingFallbackVoice: true });
+    this.play();
   }
 
   setSetting(key: SettingKey, value: boolean): void {
@@ -112,6 +170,17 @@ export class MockReaderController extends StateStore implements ReaderController
   }
 
   // ----- dev helpers (not part of ReaderController) -----
+
+  /** Pretend detection found this language (dev page states). */
+  simulateDetection(detection: Detection, preferredGender: Gender = this.gender): void {
+    this.clear();
+    this.started = false;
+    this.detection = detection;
+    this.siteChoice = undefined;
+    this.gender = preferredGender;
+    this.update({ status: "idle", currentIndex: 0, usingFallbackVoice: false, languagePickerOpen: false });
+    this.resolve();
+  }
 
   simulateFallback(): void {
     this.update({ usingFallbackVoice: true });
@@ -149,5 +218,16 @@ export class MockReaderController extends StateStore implements ReaderController
   private clear(): void {
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = undefined;
+  }
+
+  private resolve(): void {
+    const language = resolveLanguage({
+      registry: BUNDLED_REGISTRY, multilingual: this.state.multilingual,
+      detection: this.detection, siteChoice: this.siteChoice,
+    });
+    const patch: Partial<ReaderState> = {
+      language, ...voiceState(language, this.gender, BUNDLED_REGISTRY, this.voiceByLang),
+    };
+    this.update(patch);
   }
 }
