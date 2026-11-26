@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { MAX_SPEED, MIN_SPEED, type ReaderController, type ReaderState, type SettingKey } from "../controller/types";
 import { canStart } from "../lang/resolve";
 import type { DragHandlers } from "./hooks";
-import { LanguageChip, LanguagePicker, UnsupportedNotice } from "./Language";
+import { LanguageChip, LanguageConflict, LanguagePicker, UnsupportedNotice } from "./Language";
 import {
   ChevronDownIcon, CloseIcon, InfoIcon, MinusIcon, PauseIcon, PlayIcon, PlusIcon,
   SkipBackIcon, SkipForwardIcon, StopIcon, VoixLogo,
@@ -110,7 +110,9 @@ export function ExpandedPanel({ state, controller, dragHandlers, showFallbackNot
         </div>
 
         <VoiceSelect state={state} controller={controller} chipRef={chipRef} />
-        {state.languagePickerOpen && <LanguagePicker state={state} controller={controller} onDone={focusChip} />}
+        {state.languageConflict
+          ? <LanguageConflict state={state} controller={controller} onDone={focusChip} />
+          : state.languagePickerOpen && <LanguagePicker state={state} controller={controller} onDone={focusChip} />}
 
         <div>
           <div className="voix-label">
@@ -206,13 +208,16 @@ function VoiceSelect({ state, controller, chipRef }: {
       </select>
       {/* Announced by the widget's live region. */}
       {state.voiceNotice && <p className="voix-voice-notice">{state.voiceNotice}</p>}
+      {state.translationNotice && <p className="voix-voice-notice">{state.translationNotice}</p>}
     </div>
   );
 }
 
 function SentenceList({ state, controller }: { state: ReaderState; controller: ReaderController }) {
-  const { sentences, currentIndex, status, settings } = state;
+  const { sentences, currentIndex, status, settings, translated, language } = state;
   const listRef = useRef<HTMLOListElement>(null);
+  // Translating: the list shows what is being read, the page keeps the original highlighted.
+  const translationFor = (i: number) => (translated && translated.lang === language?.code ? translated.texts[i] : undefined);
 
   useEffect(() => {
     const list = listRef.current;
@@ -250,7 +255,7 @@ function SentenceList({ state, controller }: { state: ReaderState; controller: R
                 onClick={() => controller.jumpTo(i)}
               >
                 <span className="voix-sentence-num">{i + 1}.</span>
-                <span dir="auto">{s.text}</span>
+                <span dir="auto">{translationFor(i) ?? s.text}</span>
               </button>
             </li>
           ))}
