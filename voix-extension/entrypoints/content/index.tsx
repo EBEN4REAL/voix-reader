@@ -9,6 +9,7 @@ import {
 } from "../../src/docs/text";
 import { browserLanguages, decide, detectLanguage, htmlLanguage, type Detection } from "../../src/lang/detect";
 import { requestRegistry, storedRegistry } from "../../src/lang/remote";
+import { ChromeTextTranslator } from "../../src/lang/translate";
 import {
   findEmbeddedPdf, hasLargeCanvas, isPdfDocument, isPlainTextDocument, PageText,
 } from "../../src/page/extract";
@@ -39,7 +40,12 @@ export default defineContentScript({
     const controller = new VoixReaderController(
       new ExtensionAudioEngine(),
       SpeechSynthesisEngine.available() ? new SpeechSynthesisEngine() : null,
-      { site: location.hostname, refreshRegistry: () => requestRegistry(true) },
+      {
+        site: location.hostname,
+        refreshRegistry: () => requestRegistry(true),
+        // Chrome's built-in translator (Chrome 138+): absent on older browsers, so Voix never offers translation there.
+        translator: new ChromeTextTranslator(),
+      },
     );
     const ready = controller.loadPrefs();
     const lang = document.documentElement.lang || undefined;
