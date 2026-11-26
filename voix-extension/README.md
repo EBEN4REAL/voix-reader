@@ -94,6 +94,12 @@ On by default since 1.2.0 (users can turn off **Detect each article's language**
   Piper, among them German, Dutch, Polish, Russian, Swedish and Ukrainian. All but English are marked Beta.
   Hindi, Japanese and Mandarin are in the registry but disabled until they pass the listening check
   (`../scripts/speak_all.ts`). Each voice carries its engine; the extension sends it with the request.
+- Translation (1.3.0): picking a language the article isn't in translates it, sentence by sentence, with Chrome's
+  built-in translator (`src/lang/translate.ts`, Chrome 138+ desktop, on-device). The page keeps the original
+  highlighted; the widget's list shows the translation; the chip says "German · from English". The first time
+  for a language pair Chrome downloads it ("Getting German ready… 40%"). Articles in a language Voix can't read
+  but Chrome can translate (Turkish, Arabic, Korean…) get "Listen in English (translated)". Where Chrome can't
+  translate, the widget explains why instead.
 - The registry is fetched from the server (`GET /v1/voices`) at most daily; the bundled copy covers offline use.
   Single-page sites: the new article is re-read, and re-detected, after navigation.
 
