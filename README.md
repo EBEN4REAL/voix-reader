@@ -98,6 +98,23 @@ node scripts/speak_all.ts --out listening-check    # one file per voice + rating
 venv/bin/python -m unittest test_server -v         # server tests
 ```
 
+Does every voice really speak its language? `scripts/validate_languages.py` has each voice read a sentence in
+its language, then lets Whisper (speech recognition) say which language it hears, without being told, and write
+down the words. A voice passes only when its own language is heard; the character error rate of the transcript
+shows how understandable it is. Two deliberate mismatches (German selected for English text, and German text
+sent to an English voice) prove the test fails when the language is wrong. Whisper runs in its own environment:
+
+```bash
+uv venv /tmp/voix-asr && uv pip install --python /tmp/voix-asr/bin/python faster-whisper
+/tmp/voix-asr/bin/python scripts/validate_languages.py --model large-v3   # ~3 GB model, downloaded once
+```
+
+Picking a language the text isn't in means "listen in this language": the extension translates each sentence with
+Chrome's built-in, on-device translator (Chrome 138+ on desktop; free, and the text stays on the computer) and
+sends the translation to `/v1/speak`. The server never translates. Where Chrome can't translate (older Chrome, or
+Albanian, Basque, Catalan, Estonian, Kazakh, Latvian, Nepali, Persian, Urdu, Welsh), the widget says why and asks
+before reading the original words with that voice.
+
 | Local                                          | DeepInfra                                        |
 |------------------------------------------------|--------------------------------------------------|
 | `http://127.0.0.1:8880/v1/openai/audio/speech` | `https://api.deepinfra.com/v1/openai/audio/speech` |
