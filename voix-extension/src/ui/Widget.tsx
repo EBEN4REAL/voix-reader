@@ -35,6 +35,8 @@ export function Widget({ controller, ui, actions }: Props) {
     state.status === "preparing" ? state.loadingMessage ?? "Preparing voice"
     : state.status === "error" ? `Voix stopped. ${state.error ?? ""}`
     : language && !language.supported && !state.usingFallbackVoice ? `Voix cannot read ${language.name} yet.`
+    : state.languageConflict ? `This text is in ${state.languageConflict.textName}. Voix can't translate it here.`
+    : state.translationNotice ? state.translationNotice
     : state.languagePickerOpen && language?.needsConfirm ? "Choose the language to read in."
     : state.usingFallbackVoice && language?.supported ? "Using your device's basic voice. Natural voices are unavailable right now."
     : state.voiceNotice ?? "";
@@ -73,7 +75,8 @@ export function Widget({ controller, ui, actions }: Props) {
         controller.setSpeed(state.speed - 0.1);
         break;
       case "Escape":
-        if (state.languagePickerOpen) controller.closeLanguagePicker();
+        if (state.languageConflict) controller.cancelLanguageChoice();
+        else if (state.languagePickerOpen) controller.closeLanguagePicker();
         else if (view.mode === "expanded") minimise();
         break;
       default:
