@@ -103,6 +103,11 @@ function decideFromSignals(text: TextLanguages | null, htmlLang: string | null, 
   return { lang: topLang, confidence: top?.percentage ?? 0, source: "unknown", mixed, needsConfirm: true };
 }
 
+/** The text itself clearly says which language it is (not just the page's declaration, not a guess). */
+export function isConfident(d: Detection | null | undefined): d is Detection & { lang: string } {
+  return !!d?.lang && d.confidence >= MIN_CONFIDENCE && (d.source === "text" || d.source === "text_and_html");
+}
+
 /** chrome.i18n.detectLanguage, or the same call in the service worker if this context lacks it. */
 export async function detectTextLanguages(sample: string): Promise<TextLanguages | null> {
   if (!sample) return null;
