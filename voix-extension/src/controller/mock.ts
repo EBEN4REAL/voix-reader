@@ -1,6 +1,6 @@
 import type { Detection } from "../lang/detect";
-import { BUNDLED_REGISTRY, DEFAULT_GENDER, findLanguage, isReadable, type Gender } from "../lang/registry";
-import { languageOptions, resolveLanguage, voiceState } from "../lang/resolve";
+import { BUNDLED_REGISTRY, DEFAULT_GENDER, findLanguage, isReadable, languageName, type Gender } from "../lang/registry";
+import { languageConflict, languageOptions, resolveLanguage, textLanguageGuess, voiceState } from "../lang/resolve";
 import { StateStore } from "./store";
 import { clampSpeed, type ReaderController, type ReaderState, type Sentence, type SettingKey } from "./types";
 
@@ -24,6 +24,8 @@ export interface MockOptions {
   /** Base time per sentence at 1.0x, in ms. */
   sentenceMs?: number;
   preparingMs?: number;
+  /** A stand-in translator (dev page, tests): when set, picking another language translates. */
+  translate?: (text: string, from: string, to: string) => string;
 }
 
 const ENGLISH: Detection = { lang: "en", confidence: 99, source: "text", mixed: false, needsConfirm: false };
@@ -36,6 +38,9 @@ export class MockReaderController extends StateStore implements ReaderController
   private readonly preparingMs: number;
   private detection: Detection = ENGLISH;
   private siteChoice: string | undefined;
+  private articleChoice: string | undefined;
+  private fakeTranslate: MockOptions["translate"];
+  private canTranslate = (from: string, to: string) => !!this.fakeTranslate && from !== to;
   private gender: Gender = DEFAULT_GENDER;
   private voiceByLang: Record<string, string> = {};
   private playAfterPick = false;
@@ -58,6 +63,7 @@ export class MockReaderController extends StateStore implements ReaderController
     });
     this.sentenceMs = opts.sentenceMs ?? 2600;
     this.preparingMs = opts.preparingMs ?? 1400;
+    this.fakeTranslate = opts.translate;
     this.resolve();
   }
 
@@ -132,10 +138,35 @@ export class MockReaderController extends StateStore implements ReaderController
   setLanguage(code: string): void {
     const entry = findLanguage(code, BUNDLED_REGISTRY);
     if (!isReadable(entry)) return;
+    const from = textLanguageGuess(this.detection, entry.code, BUNDLED_REGISTRY);
+    const textLanguage = languageConflict(this.detection, entry.code, BUNDLED_REGISTRY);
+    if (textLanguage && !(from && this.canTranslate(from, entry.code))) {
+      this.update({ languageConflict: {
+        code: entry.code, name: entry.name, textName: languageName(textLanguage, BUNDLED_REGISTRY), reason: "no-translator",
+      } });
+      return;
+    }
     this.siteChoice = entry.code;
+    this.articleChoice = undefined;
+    this.applyChoice();
+  }
+
+  confirmLanguageChoice(): void {
+    const conflict = this.state.languageConflict;
+    if (!conflict) return;
+    this.articleChoice = conflict.code;
+    this.applyChoice();
+  }
+
+  cancelLanguageChoice(): void {
+    this.playAfterPick = false;
+    this.update({ languageConflict: undefined, languagePickerOpen: false });
+  }
+
+  private applyChoice(): void {
     const start = this.playAfterPick;
     this.playAfterPick = false;
-    this.update({ languagePickerOpen: false, usingFallbackVoice: false });
+    this.update({ languagePickerOpen: false, languageConflict: undefined, usingFallbackVoice: false });
     this.resolve();
     if (start) this.play();
   }
@@ -146,11 +177,12 @@ export class MockReaderController extends StateStore implements ReaderController
 
   closeLanguagePicker(): void {
     this.playAfterPick = false;
-    this.update({ languagePickerOpen: false });
+    this.update({ languagePickerOpen: false, languageConflict: undefined });
   }
 
   resetSiteLanguage(): void {
     this.siteChoice = undefined;
+    this.articleChoice = undefined;
     this.update({ languagePickerOpen: false });
     this.resolve();
   }
@@ -177,6 +209,7 @@ export class MockReaderController extends StateStore implements ReaderController
     this.started = false;
     this.detection = detection;
     this.siteChoice = undefined;
+    this.articleChoice = undefined;
     this.gender = preferredGender;
     this.update({ status: "idle", currentIndex: 0, usingFallbackVoice: false, languagePickerOpen: false });
     this.resolve();
@@ -223,10 +256,18 @@ export class MockReaderController extends StateStore implements ReaderController
   private resolve(): void {
     const language = resolveLanguage({
       registry: BUNDLED_REGISTRY, multilingual: this.state.multilingual,
-      detection: this.detection, siteChoice: this.siteChoice,
+      detection: this.detection, siteChoice: this.siteChoice, articleChoice: this.articleChoice,
+      canTranslate: this.canTranslate,
     });
+    const from = language?.translatedFrom?.code;
+    const english = findLanguage("en", BUNDLED_REGISTRY)!;
     const patch: Partial<ReaderState> = {
       language, ...voiceState(language, this.gender, BUNDLED_REGISTRY, this.voiceByLang),
+      translated: from && this.fakeTranslate && language
+        ? { lang: language.code, texts: this.state.sentences.map((s) => this.fakeTranslate!(s.text, from, language.code)) }
+        : undefined,
+      translateOffer: language && !language.supported && this.canTranslate(language.code, "en")
+        ? { code: english.code, name: english.name } : undefined,
     };
     this.update(patch);
   }
