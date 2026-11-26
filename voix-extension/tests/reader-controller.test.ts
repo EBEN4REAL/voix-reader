@@ -4,6 +4,7 @@ import { Emitter } from "../src/controller/engine";
 import { paragraphStart, VoixReaderController } from "../src/controller/reader";
 import type { Detection } from "../src/lang/detect";
 import { BUNDLED_REGISTRY, type Registry } from "../src/lang/registry";
+import { TranslationError, type TextTranslator, type TranslationProblem } from "../src/lang/translate";
 import { loadPrefs } from "../src/storage";
 
 vi.mock("wxt/browser", () => ({ browser: {} }));
@@ -334,20 +335,65 @@ describe("VoixReaderController languages", () => {
     expect(c.getState().voiceId).toBe("em_santa");
   });
 
-  it("the site choice beats detection on the next article, until Reset", async () => {
-    c.load(ARTICLE, detected("es"));
+  const unsure = (lang: string) => detected(lang, { confidence: 50, source: "html", needsConfirm: true });
+
+  it("a site choice is used when detection isn't sure, until Reset", async () => {
+    c.load(ARTICLE, unsure("es"));
     c.setLanguage("pt");
     await settle();
     const next = await make("news.example");
-    next.load(ARTICLE, detected("es"));
+    next.load(ARTICLE, unsure("es"));
     expect(next.getState().language).toMatchObject({ code: "pt", source: "user", savedForSite: true });
     const other = await make("elsewhere.example");
-    other.load(ARTICLE, detected("es"));
+    other.load(ARTICLE, unsure("es"));
     expect(other.getState().language?.code).toBe("es");
     next.resetSiteLanguage();
-    expect(next.getState().language).toMatchObject({ code: "es", source: "auto", savedForSite: false });
+    expect(next.getState().language).toMatchObject({ code: "es", source: "html", savedForSite: false });
     await settle();
     expect((await loadPrefs(["langByHost"])).langByHost).toEqual({});
+  });
+
+  it("a site choice never reads text that is clearly another language (Voix doesn't translate)", async () => {
+    c.load(ARTICLE, unsure("en"));
+    c.setLanguage("de"); // remembered for news.example
+    await settle();
+    const next = await make("news.example");
+    next.load(ARTICLE, detected("en")); // an English article on the same site
+    next.play();
+    expect(next.getState().language).toMatchObject({ code: "en", source: "auto" });
+    expect(natural.last).toMatchObject({ lang: "en", voiceId: "af_heart" });
+    next.load(ARTICLE, detected("de")); // a German one still reads in German
+    expect(next.getState().language).toMatchObject({ code: "de" });
+  });
+
+  it("picking another language for clearly English text warns first and sends nothing", async () => {
+    c.load(ARTICLE, detected("en"));
+    c.play();
+    natural.fire("playing");
+    const plays = natural.plays.length;
+    c.setLanguage("de");
+    expect(c.getState()).toMatchObject({
+      languageConflict: { code: "de", name: "German", textName: "English" },
+      language: { code: "en" },
+    });
+    expect(natural.plays).toHaveLength(plays); // no German request for English text
+    c.cancelLanguageChoice();
+    expect(c.getState()).toMatchObject({ languageConflict: undefined, languagePickerOpen: false, language: { code: "en" } });
+    await settle();
+    expect((await loadPrefs(["langByHost"])).langByHost).toEqual({});
+  });
+
+  it("\"use anyway\" applies to this text only and is never remembered for the site", async () => {
+    c.load(ARTICLE, detected("en"));
+    c.setLanguage("de");
+    c.confirmLanguageChoice();
+    c.play();
+    expect(c.getState()).toMatchObject({ languageConflict: undefined, language: { code: "de", savedForSite: false } });
+    expect(natural.last).toMatchObject({ lang: "de", engine: "piper" });
+    await settle();
+    expect((await loadPrefs(["langByHost"])).langByHost).toEqual({});
+    c.load(ARTICLE, detected("en")); // the next article is read in its own language again
+    expect(c.getState().language).toMatchObject({ code: "en", source: "auto" });
   });
 
   it("a language change while reading restarts from the start of the paragraph", () => {
@@ -360,6 +406,8 @@ describe("VoixReaderController languages", () => {
     expect(c.getState().currentIndex).toBe(3);
     const stops = natural.calls.filter((x) => x === "stop").length;
     c.setLanguage("it");
+    expect(c.getState().currentIndex).toBe(3); // nothing changes until the user confirms
+    c.confirmLanguageChoice();
     expect(natural.calls.filter((x) => x === "stop").length).toBeGreaterThan(stops); // queued audio dropped
     expect(c.getState().currentIndex).toBe(2);
     expect(natural.last).toMatchObject({ text: "Tres.", voiceId: "if_sara", lang: "it" });
@@ -371,6 +419,7 @@ describe("VoixReaderController languages", () => {
     natural.fire("playing");
     c.pause();
     c.setLanguage("fr");
+    c.confirmLanguageChoice();
     expect(c.getState().currentIndex).toBe(0);
     c.play();
     expect(natural.last).toMatchObject({ text: "Uno.", voiceId: "ff_siwis" });
@@ -471,5 +520,162 @@ describe("VoixReaderController languages", () => {
     expect(migrated.getState().voiceId).toBe("bm_george");
     migrated.load(ARTICLE, detected("es"));
     expect(migrated.getState().voiceId).toBe("em_alex"); // prefers men's voices, like George
+  });
+});
+
+/** Stands in for Chrome's translator: "DE: text". */
+class FakeTranslator implements TextTranslator {
+  missing = false; // an older Chrome: no translator at all
+  unsupported = new Set<string>(["ca"]); // Chrome can't translate into Catalan
+  fail: TranslationError | null = null;
+  prepared: string[] = [];
+  translated: string[] = [];
+  problem(from: string, to: string): TranslationProblem | null {
+    if (this.missing) return "no-translator";
+    return from === to || this.unsupported.has(to) ? "pair-unsupported" : null;
+  }
+  async prepare(from: string, to: string) {
+    this.prepared.push(`${from}>${to}`);
+  }
+  async translate(text: string, _from: string, to: string) {
+    if (this.fail) throw this.fail;
+    this.translated.push(text);
+    return `${to.toUpperCase()}: ${text}`;
+  }
+}
+
+describe("VoixReaderController translation", () => {
+  let natural: FakeEngine;
+  let translator: FakeTranslator;
+  let c: VoixReaderController;
+  const ARTICLE = [
+    { id: "s0", text: "One.", para: 0 }, { id: "s1", text: "Two.", para: 0 },
+    { id: "s2", text: "Three.", para: 1 }, { id: "s3", text: "Four.", para: 1 },
+  ];
+  const detected = (lang: string): Detection =>
+    ({ lang, confidence: 95, source: "text", mixed: false, needsConfirm: false });
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  async function make(site = "news.example") {
+    const ctl = new VoixReaderController(natural, new FakeEngine(), { site, translator });
+    await ctl.loadPrefs();
+    ctl.setMultilingual(true);
+    return ctl;
+  }
+
+  beforeEach(async () => {
+    natural = new FakeEngine();
+    translator = new FakeTranslator();
+    c = await make();
+  });
+
+  it("picking German for an English article translates it and reads it in German", async () => {
+    c.load(ARTICLE, detected("en"));
+    c.play();
+    natural.fire("playing");
+    c.setLanguage("de");
+    expect(c.getState()).toMatchObject({
+      languageConflict: undefined,
+      language: { code: "de", translatedFrom: { code: "en", name: "English" }, savedForSite: true },
+    });
+    expect(translator.prepared).toContain("en>de"); // started inside the click
+    await settle();
+    expect(natural.last).toMatchObject({
+      text: "DE: One.", prefetch: ["DE: Two.", "DE: Three."], lang: "de", voiceId: "de_DE-kerstin-medium", engine: "piper",
+    });
+    expect(c.getState().translated).toEqual({ lang: "de", texts: ["DE: One.", "DE: Two.", "DE: Three.", "DE: Four."] });
+    expect((await loadPrefs(["langByHost"])).langByHost).toEqual({ "news.example": "de" });
+  });
+
+  it("the next English article on that site is translated too; a German one is read as it is", async () => {
+    c.load(ARTICLE, detected("en"));
+    c.setLanguage("de");
+    await settle();
+    const next = await make();
+    next.load(ARTICLE, detected("en"));
+    expect(next.getState().language).toMatchObject({ code: "de", translatedFrom: { code: "en" } });
+    next.load(ARTICLE, detected("de"));
+    next.play();
+    expect(next.getState().language?.translatedFrom).toBeUndefined();
+    expect(natural.last).toMatchObject({ text: "One.", lang: "de" }); // no translation needed
+  });
+
+  it("a language Chrome can't translate into: warns, explaining why, and sends nothing", () => {
+    c.load(ARTICLE, detected("en"));
+    c.play();
+    const plays = natural.plays.length;
+    c.setLanguage("ca");
+    expect(c.getState().languageConflict).toMatchObject({ code: "ca", textName: "English", reason: "pair-unsupported" });
+    expect(natural.plays).toHaveLength(plays);
+  });
+
+  it("an older Chrome without a translator: warns that translation needs a newer Chrome", () => {
+    translator.missing = true;
+    c.load(ARTICLE, detected("en"));
+    c.setLanguage("de");
+    expect(c.getState().languageConflict).toMatchObject({ code: "de", reason: "no-translator" });
+  });
+
+  it("a download that needs a click: stops with a note, then Play gets it ready and reads", async () => {
+    c.load(ARTICLE, detected("en"));
+    translator.fail = new TranslationError("needs a click", "needs-click");
+    c.setLanguage("de");
+    c.play();
+    await settle();
+    expect(c.getState()).toMatchObject({
+      status: "idle", translationNotice: "Press Play to get German ready. Chrome downloads it once.",
+    });
+    expect(natural.plays).toHaveLength(0);
+    translator.fail = null;
+    c.play();
+    await settle();
+    expect(c.getState().translationNotice).toBeUndefined();
+    expect(natural.last).toMatchObject({ text: "DE: One.", lang: "de" });
+  });
+
+  it("a pair that fails to translate: reads the text in its own language, and says so", async () => {
+    c.load(ARTICLE, detected("en"));
+    translator.fail = new TranslationError("refused", "unsupported");
+    c.setLanguage("de");
+    c.play();
+    await settle();
+    expect(c.getState()).toMatchObject({
+      language: { code: "en" },
+      translationNotice: "This browser couldn't translate English to German, so Voix reads it in English.",
+    });
+    expect(natural.last).toMatchObject({ text: "One.", lang: "en", voiceId: "af_heart" });
+  });
+
+  it("Voix can't read Turkish, but offers to translate it into English", async () => {
+    c.load(ARTICLE, detected("tr"));
+    expect(c.getState()).toMatchObject({ language: { code: "tr", supported: false }, translateOffer: { code: "en", name: "English" } });
+    c.setLanguage("en");
+    c.play();
+    await settle();
+    expect(c.getState().language).toMatchObject({ code: "en", translatedFrom: { code: "tr", name: "Turkish" } });
+    expect(natural.last).toMatchObject({ text: "EN: One.", lang: "en" });
+  });
+
+  it("translates even when detection isn't sure: short pieces of English text, German picked", async () => {
+    // What a page of short headings and links gives the detector: a guess, not a certainty.
+    const unsure: Detection = { lang: "en", confidence: 50, source: "html", mixed: false, needsConfirm: true };
+    c.load(ARTICLE, unsure);
+    c.setLanguage("de");
+    expect(c.getState().language).toMatchObject({ code: "de", translatedFrom: { code: "en" } });
+    c.play();
+    await settle();
+    expect(natural.last).toMatchObject({ text: "DE: One.", lang: "de" }); // never English words to a German voice
+    const next = await make(); // and the remembered choice translates the site's next page too
+    next.load(ARTICLE, unsure);
+    expect(next.getState().language).toMatchObject({ code: "de", translatedFrom: { code: "en" } });
+  });
+
+  it("translations of a previous text are never shown for the next one", async () => {
+    c.load(ARTICLE, detected("en"));
+    c.setLanguage("de");
+    c.play();
+    await settle();
+    c.load([{ id: "s0", text: "Hallo.", para: 0 }], detected("de"));
+    expect(c.getState().translated).toBeUndefined();
   });
 });
