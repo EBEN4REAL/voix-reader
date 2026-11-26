@@ -6,3 +6,7 @@ __pycache__/
 *.pyc
 .DS_Store
 deploy/.env
+
+# Voice test output (scripts/speak_all.ts, scripts/validate_languages.py)
+listening-check/
+language-check/
