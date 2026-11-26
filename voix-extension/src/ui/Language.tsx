@@ -13,18 +13,20 @@ export const LanguageChip = forwardRef<HTMLButtonElement, Props>(function Langua
   if (!language) return null;
   const unsure = language.needsConfirm ? ", not confirmed" : "";
   const mixed = language.mixed ? ", mixed language" : "";
+  const translated = language.translatedFrom ? `, translated from ${language.translatedFrom.name}` : "";
   return (
     <button
       ref={ref}
       type="button"
       className="voix-lang-chip"
-      aria-label={`Reading language: ${language.name}${unsure}${mixed}. Change`}
+      aria-label={`Reading language: ${language.name}${translated}${unsure}${mixed}. Change`}
       aria-expanded={languagePickerOpen}
       onClick={() => (languagePickerOpen ? controller.closeLanguagePicker() : controller.openLanguagePicker())}
     >
       <GlobeIcon />
       <span>{language.name}{language.needsConfirm ? "?" : ""}</span>
-      {language.mixed && <span className="voix-lang-mixed">Mixed language</span>}
+      {language.translatedFrom && <span className="voix-lang-mixed">from {language.translatedFrom.name}</span>}
+      {language.mixed && !language.translatedFrom && <span className="voix-lang-mixed">Mixed language</span>}
     </button>
   );
 });
@@ -97,12 +99,50 @@ export function LanguagePicker({ state, controller, onDone }: Props & { onDone()
   );
 }
 
+/** The picked language isn't the text's: Voix doesn't translate, so it asks before reading it that way. */
+export function LanguageConflict({ state, controller, onDone }: Props & { onDone(): void }) {
+  const conflict = state.languageConflict;
+  const keepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => keepRef.current?.focus(), []);
+  if (!conflict) return null;
+  const done = (fn: () => void) => () => {
+    onDone();
+    fn();
+  };
+  return (
+    <div className="voix-picker" role="alertdialog" aria-labelledby="voix-conflict-title" aria-describedby="voix-conflict-body"
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        done(() => controller.cancelLanguageChoice())();
+      }}>
+      <strong id="voix-conflict-title">This text is in {conflict.textName}</strong>
+      <p id="voix-conflict-body" className="voix-picker-hint">
+        {conflict.reason === "no-translator"
+          ? `Chrome's built-in translator isn't available here, so Voix can't translate it into ${conflict.name}. `
+          : `Chrome can't translate ${conflict.textName} into ${conflict.name} automatically. `}
+        To listen in {conflict.name}, right-click the page, choose <strong>Translate to {conflict.name}</strong>, then
+        press Listen. Without translation, a {conflict.name} voice would read the {conflict.textName} words with an accent.
+      </p>
+      <div className="voix-notice-actions voix-notice-stack">
+        <button ref={keepRef} type="button" className="voix-btn voix-btn-primary" onClick={done(() => controller.cancelLanguageChoice())}>
+          Keep {conflict.textName}
+        </button>
+        <button type="button" className="voix-btn voix-btn-outline" onClick={done(() => controller.confirmLanguageChoice())}>
+          Use {conflict.name} anyway
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Voix has no natural voice for the detected language: offer the picker and the device voice.
  * Screen readers hear it through the widget's live region.
  */
 export function UnsupportedNotice({ state, controller, onChooseLanguage }: Props & { onChooseLanguage(): void }) {
-  const { language, usingFallbackVoice, deviceVoiceAvailable } = state;
+  const { language, usingFallbackVoice, deviceVoiceAvailable, translateOffer } = state;
   if (!language || language.supported) return null;
   if (usingFallbackVoice) {
     return (
@@ -123,12 +163,19 @@ export function UnsupportedNotice({ state, controller, onChooseLanguage }: Props
         <InfoIcon />
         <div>
           <strong>Voix cannot read {language.name} yet</strong>
-          <p>{deviceVoiceAvailable
-            ? `Choose another language, or listen with your device's own ${language.name} voice.`
-            : "Choose another language to listen."}</p>
+          <p>{translateOffer
+            ? `Voix can translate it and read it to you in ${translateOffer.name}.`
+            : deviceVoiceAvailable
+              ? `Choose another language, or listen with your device's own ${language.name} voice.`
+              : "Choose another language to listen."}</p>
         </div>
       </div>
       <div className="voix-notice-actions voix-notice-stack">
+        {translateOffer && (
+          <button type="button" className="voix-btn voix-btn-primary" onClick={() => controller.setLanguage(translateOffer.code)}>
+            Listen in {translateOffer.name} (translated)
+          </button>
+        )}
         <button type="button" className="voix-btn voix-btn-outline" onClick={onChooseLanguage}>
           Choose another language
         </button>
