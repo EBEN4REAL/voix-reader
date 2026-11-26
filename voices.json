@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "languages": [
     {
       "code": "en",
@@ -353,8 +353,7 @@
       "enabled": true,
       "beta": true,
       "voices": [
-        { "id": "ne_NP-google-medium", "engine": "piper", "gender": "female", "label": "Google", "license": "CC BY-SA 4.0" },
-        { "id": "ne_NP-chitwan-medium", "engine": "piper", "gender": "male", "label": "Chitwan", "license": "CC0" }
+        { "id": "ne_NP-google-medium", "engine": "piper", "gender": "female", "label": "Google", "license": "CC BY-SA 4.0" }
       ]
     },
     {
@@ -366,8 +365,7 @@
       "enabled": true,
       "beta": true,
       "voices": [
-        { "id": "no_NO-talesyntese-medium", "engine": "piper", "gender": "male", "label": "Talesyntese", "license": "CC0" },
-        { "id": "no_NO-nvcc-medium", "engine": "piper", "gender": "male", "label": "NVCC", "license": "CC0" }
+        { "id": "no_NO-talesyntese-medium", "engine": "piper", "gender": "male", "label": "Talesyntese", "license": "CC0" }
       ]
     },
     {
