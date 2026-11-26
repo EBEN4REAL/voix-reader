@@ -49,6 +49,8 @@ export interface ReadingLanguage {
   beta: boolean;
   /** Chosen by the user for this website (Reset clears it). */
   savedForSite: boolean;
+  /** The text is in another language and is translated into this one before it is read. */
+  translatedFrom?: { code: string; name: string };
 }
 
 export interface ReaderState {
@@ -68,6 +70,26 @@ export interface ReaderState {
   /** The reading language; null until it is known (Play stays disabled). */
   language: ReadingLanguage | null;
   languagePickerOpen: boolean;
+  /**
+   * The user picked a language the text clearly isn't in: Voix asks before reading it that way,
+   * because it doesn't translate (a German voice would only read English words with an accent).
+   */
+  languageConflict?: {
+    code: string;
+    name: string;
+    textName: string;
+    /** Why Voix can't translate instead: no translator in this browser, or not this pair. */
+    reason: "no-translator" | "pair-unsupported";
+  };
+  /** Voix can't read the text's language, but can translate it into this one. */
+  translateOffer?: { code: string; name: string };
+  /** One line about translation ("Press Play to get German ready", "Couldn't translate…"). */
+  translationNotice?: string;
+  /**
+   * Translations of the sentences into lang, by sentence index (filled as Voix translates ahead).
+   * Kept apart from sentences so translating never looks like a new text to the page.
+   */
+  translated?: { lang: string; texts: (string | undefined)[] };
   /** One line about the voice, e.g. "Only a female voice is available for French." */
   voiceNotice?: string;
   /** The device has a voice for the reading language (offer "Use my device voice"). */
@@ -92,8 +114,15 @@ export interface ReaderController {
   setSetting(key: SettingKey, value: boolean): void;
   /** Leave the device-voice fallback and retry the natural voice from the current sentence. */
   retryNaturalVoice(): void;
-  /** The user picked a language: remembered for this website, wins over detection. */
+  /**
+   * The user picked a language: remembered for this website. If the text clearly is another
+   * language, sets languageConflict and waits for confirmLanguageChoice / cancelLanguageChoice.
+   */
   setLanguage(code: string): void;
+  /** Read this text with the picked language anyway (this article only; not remembered). */
+  confirmLanguageChoice(): void;
+  /** Keep the text's own language. */
+  cancelLanguageChoice(): void;
   openLanguagePicker(): void;
   closeLanguagePicker(): void;
   /** Forget this website's language choice and go back to detection. */
