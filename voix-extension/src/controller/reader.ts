@@ -1,13 +1,14 @@
-import type { Detection } from "../lang/detect";
+import { browserLanguages, type Detection } from "../lang/detect";
 import {
-  BUNDLED_REGISTRY, DEFAULT_GENDER, findLanguage, isReadable, voiceBelongs, type Gender, type Registry,
+  BUNDLED_REGISTRY, DEFAULT_GENDER, findLanguage, isReadable, languageName, voiceBelongs, type Gender, type Registry,
 } from "../lang/registry";
-import { languageOptions, resolveLanguage, voiceState } from "../lang/resolve";
+import { languageConflict, languageOptions, resolveLanguage, textLanguageGuess, voiceState } from "../lang/resolve";
+import { TranslationError, type TextTranslator } from "../lang/translate";
 import { loadPrefs, savePrefs, saveSiteLanguage } from "../storage";
 import type { AudioEngine, EngineEvent } from "./engine";
 import { StateStore } from "./store";
 import {
-  clampSpeed, type ReaderController, type ReaderState, type Sentence, type SettingKey,
+  clampSpeed, type ReaderController, type ReaderState, type ReadingLanguage, type Sentence, type SettingKey,
 } from "./types";
 
 const PREFETCH = 2;
@@ -17,6 +18,8 @@ export interface ReaderOptions {
   site?: string;
   /** Fetch the voice registry from the server again, after it refused a language or voice. */
   refreshRegistry?: () => Promise<Registry | null>;
+  /** Translates the text when the user listens in another language (Chrome's built-in translator). */
+  translator?: TextTranslator;
 }
 
 /** First sentence of the paragraph a sentence is in (the sentence itself if paragraphs are unknown). */
@@ -50,6 +53,8 @@ export class VoixReaderController extends StateStore implements ReaderController
   private registry: Registry = BUNDLED_REGISTRY;
   private detection: Detection | null = null;
   private siteChoice: string | undefined;
+  /** Chosen for the current text after a language-conflict warning; cleared by the next text. */
+  private articleChoice: string | undefined;
   private gender: Gender = DEFAULT_GENDER;
   private voiceByLang: Record<string, string> = {};
   /** Languages the voice service refused this session. */
@@ -60,6 +65,15 @@ export class VoixReaderController extends StateStore implements ReaderController
   private deviceOnly = false;
   /** One registry reload and retry per voice/language mismatch. */
   private mismatchRetried = false;
+  /** Changes with every new text, so late translations of an old one are dropped. */
+  private textToken = 0;
+  /** Pairs that failed to translate this session ("en|de"): read in the text's own language instead. */
+  private untranslatable = new Set<string>();
+  /** The background translation pass that is running ("token|from|to"). */
+  private translatingAhead = "";
+
+  private canTranslate = (from: string, to: string): boolean =>
+    !!this.opts.translator && !this.untranslatable.has(`${from}|${to}`) && this.opts.translator.problem(from, to) === null;
 
   constructor(private natural: AudioEngine, private fallback: AudioEngine | null, private opts: ReaderOptions = {}) {
     super({
@@ -120,11 +134,44 @@ export class VoixReaderController extends StateStore implements ReaderController
   setLanguage(code: string): void {
     const entry = findLanguage(code, this.registry);
     if (!isReadable(entry)) return;
+    const multilingual = this.state.multilingual;
+    // What the text is in, as best known (detection may not be sure, e.g. a page of short headings).
+    const from = multilingual ? textLanguageGuess(this.detection, entry.code, this.registry) : null;
+    const translatable = !!from && this.canTranslate(from, entry.code);
+    const clearlyOther = multilingual ? languageConflict(this.detection, entry.code, this.registry) : null;
+    if (clearlyOther && !translatable) {
+      // Can't translate here: ask before reading, say, English text with a German voice.
+      this.update({ languageConflict: {
+        code: entry.code, name: entry.name, textName: languageName(clearlyOther, this.registry),
+        reason: this.opts.translator?.problem(clearlyOther, entry.code) ?? "no-translator",
+      } });
+      return;
+    }
+    // Listening in another language: start getting it ready now, inside the user's click
+    // (the first time, Chrome downloads the language pack and needs that click).
+    if (translatable) this.prepareTranslation(from!, entry.code);
     this.siteChoice = entry.code;
+    this.articleChoice = undefined;
     if (this.opts.site) void saveSiteLanguage(this.opts.site, entry.code);
+    this.applyChoice();
+  }
+
+  confirmLanguageChoice(): void {
+    const conflict = this.state.languageConflict;
+    if (!conflict) return;
+    this.articleChoice = conflict.code; // this text only: never remembered for the site
+    this.applyChoice();
+  }
+
+  cancelLanguageChoice(): void {
+    this.playAfterPick = false;
+    this.update({ languageConflict: undefined, languagePickerOpen: false });
+  }
+
+  private applyChoice(): void {
     const start = this.playAfterPick;
     this.playAfterPick = false;
-    this.update({ languagePickerOpen: false });
+    this.update({ languagePickerOpen: false, languageConflict: undefined });
     this.resolve(); // restarts from the start of the paragraph if reading
     if (start) this.play();
   }
@@ -135,11 +182,12 @@ export class VoixReaderController extends StateStore implements ReaderController
 
   closeLanguagePicker(): void {
     this.playAfterPick = false;
-    this.update({ languagePickerOpen: false });
+    this.update({ languagePickerOpen: false, languageConflict: undefined });
   }
 
   resetSiteLanguage(): void {
     this.siteChoice = undefined;
+    this.articleChoice = undefined;
     if (this.opts.site) void saveSiteLanguage(this.opts.site, null);
     this.update({ languagePickerOpen: false });
     this.resolve();
@@ -162,13 +210,17 @@ export class VoixReaderController extends StateStore implements ReaderController
       multilingual: this.state.multilingual,
       detection: this.detection,
       siteChoice: this.siteChoice,
+      articleChoice: this.articleChoice,
       refused: this.refused,
+      canTranslate: this.canTranslate,
     });
-    const changed = before?.code !== language?.code || before?.supported !== language?.supported;
+    const changed = before?.code !== language?.code || before?.supported !== language?.supported
+      || before?.translatedFrom?.code !== language?.translatedFrom?.code;
     const patch: Partial<ReaderState> = {
       language,
       ...voiceState(language, this.gender, this.registry, this.voiceByLang),
       deviceVoiceAvailable: !!language && !!this.fallback && (this.fallback.supports?.(language.code) ?? true),
+      translateOffer: this.translateOffer(language),
     };
     if (changed && this.deviceOnly) {
       this.deviceOnly = false;
@@ -176,6 +228,14 @@ export class VoixReaderController extends StateStore implements ReaderController
     }
     this.update(patch);
     if (changed) this.restartForLanguage();
+  }
+
+  /** Voix can't read this language, but can translate it into one it reads (the browser's first, else English). */
+  private translateOffer(language: ReadingLanguage | null): ReaderState["translateOffer"] {
+    if (!language || language.supported || !this.state.multilingual) return undefined;
+    const candidates = [...browserLanguages(), "en"].map((tag) => findLanguage(tag, this.registry));
+    const target = candidates.find((l) => isReadable(l) && l.code !== language.code && this.canTranslate(language.code, l.code));
+    return target ? { code: target.code, name: target.name } : undefined;
   }
 
   /** The language changed under the reader: drop queued audio, go back to the paragraph start. */
@@ -216,6 +276,9 @@ export class VoixReaderController extends StateStore implements ReaderController
   /** New text to read. detection: its language (undefined keeps the current one). */
   load(sentences: Sentence[], detection?: Detection | null): void {
     this.halt();
+    this.articleChoice = undefined;
+    this.textToken++;
+    this.update({ languageConflict: undefined, translated: undefined, translationNotice: undefined });
     this.started = false;
     this.loading = this.autoplay = this.waitingForMore = false;
     this.mismatchRetried = false;
@@ -233,6 +296,9 @@ export class VoixReaderController extends StateStore implements ReaderController
     this.waitingForMore = false;
     this.mismatchRetried = false;
     this.detection = null; // a new document: its language is detected from its first text
+    this.articleChoice = undefined;
+    this.textToken++;
+    this.update({ languageConflict: undefined, translated: undefined, translationNotice: undefined });
     this.update({ sentences: [], currentIndex: 0, status: "preparing", error: undefined, loadingMessage: message });
     this.resolve();
   }
@@ -284,6 +350,11 @@ export class VoixReaderController extends StateStore implements ReaderController
     }
     if (status === "playing" || status === "preparing") return;
     if (!this.gate()) return;
+    const translatedFrom = this.state.language?.translatedFrom;
+    if (translatedFrom) {
+      this.update({ translationNotice: undefined });
+      this.prepareTranslation(translatedFrom.code, this.state.language!.code); // inside the click
+    }
     if (status === "paused" && !this.needsRestart) {
       this.engine().resume();
       this.update({ status: this.started ? "playing" : "preparing" });
@@ -376,19 +447,111 @@ export class VoixReaderController extends StateStore implements ReaderController
     }
     const id = ++this.requestId;
     const voice = voices.find((v) => v.id === voiceId);
-    this.needsRestart = false;
-    this.update({ currentIndex: index, status: this.started ? "playing" : "preparing", error: undefined });
-    this.engine().play({
+    const play = (text: string, prefetch: string[]) => this.engine().play({
       requestId: id,
-      text: sentence.text,
+      text,
       voiceId,
       lang: language.code,
       deviceLang: voice?.locale ?? language.code,
       langSource: language.source,
       engine: voice?.engine,
       rate: speed,
-      prefetch: sentences.slice(index + 1, index + 1 + PREFETCH).map((s) => s.text),
+      prefetch,
     });
+    this.needsRestart = false;
+    const from = language.translatedFrom?.code;
+    // Waiting for a translation (the first time, a language pack download) shows "Preparing".
+    const waiting = !!from && this.translationOf(index, language.code) === undefined;
+    this.update({ currentIndex: index, status: this.started && !waiting ? "playing" : "preparing", error: undefined });
+    if (!from) {
+      play(sentence.text, sentences.slice(index + 1, index + 1 + PREFETCH).map((s) => s.text));
+      return;
+    }
+    const token = this.textToken;
+    this.translations(index, index + 1 + PREFETCH, from, language.code, token).then(
+      ([text, ...prefetch]) => {
+        if (id !== this.requestId) return; // the user moved on meanwhile
+        play(text!, prefetch);
+        this.translateAhead(from, language.code, token);
+      },
+      (e) => {
+        if (id === this.requestId) this.translationFailed(e, from, language);
+      },
+    );
+  }
+
+  // ----- translation -----
+
+  private translationOf(index: number, lang: string): string | undefined {
+    const t = this.state.translated;
+    return t?.lang === lang ? t.texts[index] : undefined;
+  }
+
+  /** Translations of sentences [start, end), from what is known or the translator; remembered in state. */
+  private async translations(start: number, end: number, from: string, to: string, token: number): Promise<string[]> {
+    const sentences = this.state.sentences.slice(start, end);
+    const out: string[] = [];
+    for (const [i, s] of sentences.entries()) {
+      out.push(this.translationOf(start + i, to) ?? await this.opts.translator!.translate(s.text, from, to));
+    }
+    if (token === this.textToken) {
+      const current = this.state.translated;
+      const texts = current?.lang === to ? current.texts.slice() : [];
+      out.forEach((text, i) => { texts[start + i] = text; });
+      this.update({ translated: { lang: to, texts } });
+    }
+    return out;
+  }
+
+  /** Translate the rest of the text in the background: the list shows it, and reading never waits. */
+  private translateAhead(from: string, to: string, token: number): void {
+    const key = `${token}|${from}|${to}`;
+    if (this.translatingAhead === key) return;
+    this.translatingAhead = key;
+    void (async () => {
+      for (let i = 0; i < this.state.sentences.length; i += 5) {
+        if (this.translatingAhead !== key || token !== this.textToken || this.state.language?.code !== to) return;
+        const end = Math.min(i + 5, this.state.sentences.length);
+        const missing = Array.from({ length: end - i }, (_, k) => this.translationOf(i + k, to)).includes(undefined);
+        if (!missing) continue;
+        try {
+          await this.translations(i, end, from, to, token);
+        } catch {
+          return; // reading itself reports translation problems
+        }
+      }
+    })();
+  }
+
+  /** Start getting a translation ready; called from clicks, as Chrome's first download needs one. */
+  private prepareTranslation(from: string, to: string): void {
+    const translator = this.opts.translator;
+    if (!translator || !this.canTranslate(from, to)) return;
+    const name = languageName(to, this.registry);
+    translator.prepare(from, to, (fraction) => {
+      if (fraction < 1) this.update({ loadingMessage: `Getting ${name} ready… ${Math.round(fraction * 100)}%` });
+    }).then(
+      () => { if (this.state.loadingMessage?.startsWith("Getting ")) this.update({ loadingMessage: undefined }); },
+      () => {}, // reading reports it
+    );
+  }
+
+  private translationFailed(e: unknown, from: string, language: ReadingLanguage): void {
+    const fromName = language.translatedFrom?.name ?? languageName(from, this.registry);
+    const wasReading = this.state.status === "playing" || this.state.status === "preparing";
+    this.halt();
+    this.started = false;
+    if (e instanceof TranslationError && e.kind === "needs-click") {
+      this.update({ status: "idle", loadingMessage: undefined,
+        translationNotice: `Press Play to get ${language.name} ready. Chrome downloads it once.` });
+      return;
+    }
+    // This pair can't be translated here after all: read the text in its own language.
+    this.untranslatable.add(`${from}|${language.code}`);
+    this.update({ status: "idle", loadingMessage: undefined,
+      translationNotice: `This browser couldn't translate ${fromName} to ${language.name}, so Voix reads it in ${fromName}.` });
+    this.resolve();
+    if (wasReading) this.play();
   }
 
   private advance(): void {
