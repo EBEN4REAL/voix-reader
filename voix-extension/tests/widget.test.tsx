@@ -1,12 +1,12 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MockReaderController } from "../src/controller/mock";
+import { MockReaderController, type MockOptions } from "../src/controller/mock";
 import { UiStore, type WidgetActions } from "../src/ui/uiStore";
 import { Widget } from "../src/ui/Widget";
 
-function setup(mode: "expanded" | "pill" = "expanded") {
-  const controller = new MockReaderController({ sentenceMs: 1000, preparingMs: 100 });
+function setup(mode: "expanded" | "pill" = "expanded", options: MockOptions = {}) {
+  const controller = new MockReaderController({ sentenceMs: 1000, preparingMs: 100, ...options });
   const ui = new UiStore();
   ui.set({ mode });
   const actions: WidgetActions = {
@@ -252,14 +252,59 @@ describe("Widget", () => {
       expect(within(picker).getByRole("button", { name: /Español/ })).toHaveAttribute("aria-current", "true");
       expect(within(picker).getByRole("button", { name: /Español/ })).toHaveFocus();
       await user.click(within(picker).getByRole("button", { name: /Italiano/ }));
+      // The text is clearly Spanish: Voix explains it doesn't translate before reading it as Italian.
+      const warning = screen.getByRole("alertdialog", { name: "This text is in Spanish" });
+      expect(warning).toHaveTextContent("Chrome's built-in translator isn't available here");
+      expect(warning).toHaveTextContent("right-click the page, choose Translate to Italian, then press Listen");
+      expect(within(warning).getByRole("button", { name: "Keep Spanish" })).toHaveFocus();
+      await user.click(within(warning).getByRole("button", { name: "Use Italian anyway" }));
       expect(screen.queryByRole("group", { name: "Reading language" })).not.toBeInTheDocument();
-      expect(controller.getState()).toMatchObject({ language: { code: "it", savedForSite: true }, voiceId: "if_sara" });
+      expect(controller.getState()).toMatchObject({ language: { code: "it", savedForSite: false }, voiceId: "if_sara" });
       expect(screen.getByRole("button", { name: "Reading language: Italian. Change" })).toHaveFocus();
+    });
+
+    it("Keep (or Escape) on the warning leaves the text's own language", async () => {
+      const { controller, user } = setup();
+      act(() => controller.simulateDetection(detection("en")));
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      await user.click(screen.getByRole("button", { name: /Deutsch/ }));
+      expect(document.querySelector("[aria-live='polite']")).toHaveTextContent("This text is in English. Voix can't translate it here.");
+      await user.click(screen.getByRole("button", { name: "Keep English" }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(controller.getState().language).toMatchObject({ code: "en" });
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      await user.click(screen.getByRole("button", { name: /Deutsch/ }));
+      await user.keyboard("{Escape}");
+      expect(controller.getState()).toMatchObject({ languageConflict: undefined, language: { code: "en" } });
+      expect(screen.getByRole("region", { name: "Voix reader" })).toBeInTheDocument(); // not minimised
+    });
+
+    it("translation: picking German for English text reads it in German; chip and list say so", async () => {
+      const { controller, user } = setup("expanded", { translate: (text, _from, to) => `[${to}] ${text}` });
+      act(() => controller.simulateDetection(detection("en")));
+      await user.click(screen.getByRole("button", { name: /Reading language/ }));
+      await user.click(screen.getByRole("button", { name: /Deutsch/ }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); // no warning: it translates
+      const chip = screen.getByRole("button", { name: "Reading language: German, translated from English. Change" });
+      expect(chip).toHaveTextContent("Germanfrom English");
+      const rows = within(screen.getByRole("list", { name: "Text being read" })).getAllByRole("button");
+      expect(rows[0]).toHaveTextContent("[de] The Quiet Return of the Long Read");
+      expect(controller.getState().voiceId).toBe("de_DE-kerstin-medium");
+    });
+
+    it("an article Voix can't read: offers to listen in English, translated", async () => {
+      const { controller, user } = setup("expanded", { translate: (text, _from, to) => `[${to}] ${text}` });
+      act(() => controller.simulateDetection(detection("tr")));
+      expect(screen.getByText("Voix cannot read Turkish yet")).toBeInTheDocument();
+      expect(screen.getByText("Voix can translate it and read it to you in English.")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Listen in English (translated)" }));
+      expect(controller.getState().language).toMatchObject({ code: "en", translatedFrom: { code: "tr", name: "Turkish" } });
+      expect(screen.queryByText("Voix cannot read Turkish yet")).not.toBeInTheDocument();
     });
 
     it("Reset forgets the site's choice", async () => {
       const { controller, user } = setup();
-      act(() => controller.simulateDetection(detection("es")));
+      act(() => controller.simulateDetection(detection("es", { confidence: 50, source: "html", needsConfirm: true })));
       act(() => controller.setLanguage("fr"));
       await user.click(screen.getByRole("button", { name: /Reading language/ }));
       expect(screen.getByText("Remembered for this site.")).toBeInTheDocument();
